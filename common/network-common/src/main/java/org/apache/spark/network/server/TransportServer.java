@@ -100,8 +100,10 @@ public class TransportServer implements Closeable {
   private void init(String hostToBind, int portToBind) {
 
     IOMode ioMode = IOMode.valueOf(conf.ioMode());
+    // 事件循环器组-boss
     EventLoopGroup bossGroup = NettyUtils.createEventLoop(ioMode, 1,
       conf.getModuleName() + "-boss");
+    // 事件循环器组-server
     EventLoopGroup workerGroup =  NettyUtils.createEventLoop(ioMode, conf.serverThreads(),
       conf.getModuleName() + "-server");
 

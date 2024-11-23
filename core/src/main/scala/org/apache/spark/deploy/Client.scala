@@ -77,12 +77,15 @@ private class ClientEndpoint(
     sys.props.get(key).orElse(conf.getOption(key))
   }
 
+  // inbox 之后的启动函数
   override def onStart(): Unit = {
+    // 驱动的命令参数匹配
     driverArgs.cmd match {
       case "launch" =>
         // TODO: We could add an env variable here and intercept it in `sc.addJar` that would
         //       truncate filesystem paths similar to what YARN does. For now, we just require
         //       people call `addJar` assuming the jar is in the same directory.
+        // 主类 driver包装类
         val mainClass = "org.apache.spark.deploy.worker.DriverWrapper"
 
         val classPathConf = config.DRIVER_CLASS_PATH.key
@@ -101,11 +104,14 @@ private class ClientEndpoint(
 
         val sparkJavaOpts = Utils.sparkJavaOpts(conf)
         val javaOpts = sparkJavaOpts ++ extraJavaOpts
+        // 命令对象,将主类放入其中
         val command = new Command(mainClass,
           Seq("{{WORKER_URL}}", "{{USER_JAR}}", driverArgs.mainClass) ++ driverArgs.driverOptions,
           sys.env, classPathEntries, libraryPathEntries, javaOpts)
         val driverResourceReqs = ResourceUtils.parseResourceRequirements(conf,
           config.SPARK_DRIVER_PREFIX)
+
+        // 驱动描述信息
         val driverDescription = new DriverDescription(
           driverArgs.jarUrl,
           driverArgs.memory,
@@ -113,7 +119,10 @@ private class ClientEndpoint(
           driverArgs.supervise,
           command,
           driverResourceReqs)
+
+        // 异步发送到master并且转发接收消息
         asyncSendToMasterAndForwardReply[SubmitDriverResponse](
+          // 提交driver
           RequestSubmitDriver(driverDescription))
 
       case "kill" =>
@@ -131,8 +140,11 @@ private class ClientEndpoint(
    * Send the message to master and forward the reply to self asynchronously.
    */
   private def asyncSendToMasterAndForwardReply[T: ClassTag](message: Any): Unit = {
+    // 遍历master端点
     for (masterEndpoint <- masterEndpoints) {
+      // 端点计算完成函数
       masterEndpoint.ask[T](message).onComplete {
+        // 成功: 发送消息
         case Success(v) => self.send(v)
         case Failure(e) =>
           logWarning(log"Error sending messages to master " +
@@ -204,6 +216,8 @@ private class ClientEndpoint(
         System.exit(-1)
     }
   }
+
+  // 接收函数
   override def receive: PartialFunction[Any, Unit] = {
 
     case SubmitDriverResponse(master, success, driverId, message) =>
@@ -277,9 +291,11 @@ object Client {
   }
 }
 
+// ClientApp 主类
 private[spark] class ClientApp extends SparkApplication {
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
+    // 驱动参数
     val driverArgs = new ClientArguments(args)
 
     if (!conf.contains(RPC_ASK_TIMEOUT)) {
@@ -287,11 +303,13 @@ private[spark] class ClientApp extends SparkApplication {
     }
     LogManager.getRootLogger.asInstanceOf[Logger].setLevel(driverArgs.logLevel)
 
+    // 启动一个netty 服务
     val rpcEnv =
       RpcEnv.create("driverClient", Utils.localHostName(), 0, conf, new SecurityManager(conf))
-
+    // 获取master 端点,解析 spark URL 来获取master地址
     val masterEndpoints = driverArgs.masters.map(RpcAddress.fromSparkURL).
       map(rpcEnv.setupEndpointRef(_, Master.ENDPOINT_NAME))
+    // 设置 client 端点
     rpcEnv.setupEndpoint("client",
       new ClientEndpoint(rpcEnv, driverArgs, masterEndpoints.toImmutableArraySeq, conf))
 

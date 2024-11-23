@@ -236,7 +236,9 @@ private[deploy] class Worker(
       System.exit(1)
     }
   }
-
+  /**
+   * 端点启动方法
+   */
   override def onStart(): Unit = {
     assert(!registered)
     logInfo(log"Starting Spark worker ${MDC(HOST, host)}:${MDC(PORT, port)} " +
@@ -244,15 +246,20 @@ private[deploy] class Worker(
       log"${MDC(MEMORY_SIZE, Utils.megabytesToString(memory))} RAM")
     logInfo(log"Running Spark version ${MDC(SPARK_VERSION, org.apache.spark.SPARK_VERSION)}")
     logInfo(log"Spark home: ${MDC(PATH, sparkHome)}")
+    // 创建工作目录
     createWorkDir()
+    // 扩展洗牌服务
     startExternalShuffleService()
+    // 设置工作资源
     setupWorkerResources()
     webUi = new WorkerWebUI(this, workDir, webUiPort)
     webUi.bind()
 
     workerWebUiUrl = s"${webUi.scheme}$publicAddress:${webUi.boundPort}"
+    // 注册到master
     registerWithMaster()
 
+    // 监控服务
     metricsSystem.registerSource(workerSource)
     metricsSystem.start()
     // Attach the worker metrics servlet handler to the web ui after the metrics system is started.
@@ -317,14 +324,20 @@ private[deploy] class Worker(
     // Cancel any outstanding re-registration attempts because we found a new master
     cancelLastRegistrationRetry()
   }
-
+  /**
+   * 注册到所有master服务
+   * @return
+   */
   private def tryRegisterAllMasters(): Array[JFuture[_]] = {
     masterRpcAddresses.map { masterAddress =>
+      // 异步注册执行
       registerMasterThreadPool.submit(new Runnable {
         override def run(): Unit = {
           try {
             logInfo(log"Connecting to master ${MDC(MASTER_URL, masterAddress)}...")
+            // 返回一个master端点引用
             val masterEndpoint = rpcEnv.setupEndpointRef(masterAddress, Master.ENDPOINT_NAME)
+            // 发送给master
             sendRegisterMessageToMaster(masterEndpoint)
           } catch {
             case ie: InterruptedException => // Cancelled
@@ -429,14 +442,16 @@ private[deploy] class Worker(
     registrationRetryTimer.foreach(_.cancel(true))
     registrationRetryTimer = None
   }
-
+  /**
+   * 注册到master
+   */
   private def registerWithMaster(): Unit = {
     // onDisconnected may be triggered multiple times, so don't attempt registration
     // if there are outstanding registration attempts scheduled.
     registrationRetryTimer match {
       case None =>
         registered = false
-        registerMasterFutures = tryRegisterAllMasters()
+        registerMasterFutures = tryRegisterAllMasters(); // 尝试注册到所有的master
         connectionAttemptCount = 0
         registrationRetryTimer = Some(forwardMessageScheduler.scheduleAtFixedRate(
           () => Utils.tryLogNonFatalError { Option(self).foreach(_.send(ReregisterWithMaster)) },
@@ -460,6 +475,7 @@ private[deploy] class Worker(
   }
 
   private def sendRegisterMessageToMaster(masterEndpoint: RpcEndpointRef): Unit = {
+    // 发送给master, 发送一个 注册起对象
     masterEndpoint.send(RegisterWorker(
       workerId,
       host,
@@ -474,6 +490,7 @@ private[deploy] class Worker(
 
   private def handleRegisterResponse(msg: RegisterWorkerResponse): Unit = synchronized {
     msg match {
+      // 来自master发送的已注册消息
       case RegisteredWorker(masterRef, masterWebUiUrl, masterAddress, duplicate) =>
         val preferredMasterAddress = if (preferConfiguredMasterAddress) {
           masterAddress.toSparkURL
@@ -492,6 +509,7 @@ private[deploy] class Worker(
         logInfo(log"Successfully registered with master ${MDC(MASTER_URL, preferredMasterAddress)}")
         registered = true
         changeMaster(masterRef, masterWebUiUrl, masterAddress)
+        // 发送心跳
         forwardMessageScheduler.scheduleAtFixedRate(
           () => Utils.tryLogNonFatalError { self.send(SendHeartbeat) },
           0, HEARTBEAT_MILLIS, TimeUnit.MILLISECONDS)
@@ -684,6 +702,7 @@ private[deploy] class Worker(
         }
       }
 
+    // 处理driver驱动消息
     case LaunchDriver(driverId, driverDesc, resources_) =>
       logInfo(log"Asked to launch driver ${MDC(DRIVER_ID, driverId)}")
       val driver = new DriverRunner(
@@ -698,6 +717,7 @@ private[deploy] class Worker(
         securityMgr,
         resources_)
       drivers(driverId) = driver
+      // 执行启动driver启动器
       driver.start()
 
       coresUsed += driverDesc.cores
@@ -714,6 +734,7 @@ private[deploy] class Worker(
       }
 
     case driverStateChanged @ DriverStateChanged(driverId, state, exception) =>
+      // 已启动driver
       handleDriverStateChanged(driverStateChanged)
 
     case ReregisterWithMaster =>
@@ -785,6 +806,7 @@ private[deploy] class Worker(
    */
   private def sendToMaster(message: Any): Unit = {
     master match {
+      // 发送消息到master
       case Some(masterRef) => masterRef.send(message)
       case None =>
         logWarning(
@@ -915,7 +937,9 @@ private[deploy] class Worker(
       case _ =>
         logDebug(s"Driver $driverId changed state to $state")
     }
+    // 给 master发送消息
     sendToMaster(driverStateChanged)
+    // 驱动信息
     val driver = drivers.remove(driverId).get
     finishedDrivers(driverId) = driver
     trimFinishedDriversIfNecessary()
@@ -984,6 +1008,7 @@ private[deploy] object Worker extends Logging {
     Utils.initDaemon(log)
     val conf = new SparkConf
     val args = new WorkerArguments(argStrings, conf)
+    // 启动rpc基础设施
     val rpcEnv = startRpcEnvAndEndpoint(args.host, args.port, args.webUiPort, args.cores,
       args.memory, args.masters, args.workDir, conf = conf,
       resourceFileOpt = conf.get(SPARK_WORKER_RESOURCE_FILE))
@@ -1016,8 +1041,11 @@ private[deploy] object Worker extends Logging {
     // The LocalSparkCluster runs multiple local sparkWorkerX RPC Environments
     val systemName = SYSTEM_NAME + workerNumber.map(_.toString).getOrElse("")
     val securityMgr = new SecurityManager(conf)
+    // 启动rpcEnv基础设施 netty服务
     val rpcEnv = RpcEnv.create(systemName, host, port, conf, securityMgr)
+    // master地址
     val masterAddresses = masterUrls.map(RpcAddress.fromSparkURL)
+    // 注册端点
     rpcEnv.setupEndpoint(ENDPOINT_NAME, new Worker(rpcEnv, webUiPort, cores, memory,
       masterAddresses, ENDPOINT_NAME, workDir, conf, securityMgr, resourceFileOpt))
     rpcEnv

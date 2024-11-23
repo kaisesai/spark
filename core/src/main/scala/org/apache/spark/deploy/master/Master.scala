@@ -144,6 +144,7 @@ private[deploy] class Master(
   }
 
   override def onStart(): Unit = {
+    // 启动服务master
     logInfo(log"Starting Spark master at ${MDC(LogKeys.MASTER_URL, masterUrl)}")
     logInfo(log"Running Spark version" +
       log" ${MDC(LogKeys.SPARK_VERSION, org.apache.spark.SPARK_VERSION)}")
@@ -406,6 +407,7 @@ private[deploy] class Master(
 
   }
 
+  // 接收函数方法
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
     case RequestSubmitDriver(description) =>
       if (state != RecoveryState.ALIVE) {
@@ -414,15 +416,20 @@ private[deploy] class Master(
         context.reply(SubmitDriverResponse(self, false, None, msg))
       } else {
         logInfo(log"Driver submitted ${MDC(LogKeys.CLASS_NAME, description.command.mainClass)}")
+        // 创建一个 driver信息
         val driver = createDriver(description)
+        // 把驱动添加到持久化的引擎中
         persistenceEngine.addDriver(driver)
+        // 等待的驱动加一
         waitingDrivers += driver
+        // 现有的驱动加一
         drivers.add(driver)
+        // 调度
         schedule()
 
         // TODO: It might be good to instead have the submission client poll the master to determine
         //       the current status of the driver. For now it's simply "fire and forget".
-
+        // 应用回复 client段
         context.reply(SubmitDriverResponse(self, true, Some(driver.id),
           s"Driver successfully submitted as ${driver.id}"))
       }
@@ -706,9 +713,12 @@ private[deploy] class Master(
         resources.map(r => r._1 -> WorkerResourceInfo(r._1, r._2.addresses.toImmutableArraySeq))
       val worker = new WorkerInfo(id, workerHost, workerPort, cores, memory,
         workerRef, workerWebUiUrl, workerResources)
+      // 注册worker
       if (registerWorker(worker)) {
         persistenceEngine.addWorker(worker)
+        // worker引用发送
         workerRef.send(RegisteredWorker(self, masterWebUiUrl, masterAddress, false))
+        // 调度
         schedule()
       } else {
         val workerAddress = worker.endpoint.address
@@ -768,6 +778,7 @@ private[deploy] class Master(
       val enoughCores = usableWorkers(pos).coresFree - assignedCores(pos) >= minCoresPerExecutor
       val assignedExecutorNum = assignedExecutors(pos)
 
+      // 启动新的执行器
       // If we allow multiple executors per worker, then we can always launch new executors.
       // Otherwise, if there is already an executor on this worker, just give it more cores.
       val launchingNewExecutor = !oneExecutorPerWorker || assignedExecutorNum == 0
@@ -858,11 +869,13 @@ private[deploy] class Master(
             logWarning(log"App ${MDC(LogKeys.APP_ID, app.id)} requires more resource " +
               log"than any of Workers could have.")
           }
+          // 分配核心
           val assignedCores =
             scheduleExecutorsOnWorkers(app, rpId, resourceDesc, usableWorkers, spreadOutApps)
 
           // Now that we've decided how many cores to allocate on each worker, let's allocate them
           for (pos <- usableWorkers.indices if assignedCores(pos) > 0) {
+            // 分配worker资源到 executor 上
             allocateWorkerResourceToExecutors(
               app,
               assignedCores(pos),
@@ -947,9 +960,12 @@ private[deploy] class Master(
     }
     // Drivers take strict precedence over executors
     if (spreadOutDrivers) {
+      // 将worker打散
       val shuffledAliveWorkers = Random.shuffle(workers.toSeq.filter(_.state == WorkerState.ALIVE))
+      // worker的数量
       val numWorkersAlive = shuffledAliveWorkers.size
       var curPos = 0
+      // 遍历带等待的driver
       for (driver <- waitingDrivers.toList) { // iterate over a copy of waitingDrivers
         // We assign workers to each waiting driver in a round-robin fashion. For each driver, we
         // start from the last worker that was assigned a driver, and continue onwards until we have
@@ -958,12 +974,17 @@ private[deploy] class Master(
         var isClusterIdle = !launched
         var numWorkersVisited = 0
         while (numWorkersVisited < numWorkersAlive && !launched) {
+          // 洗牌worker
           val worker = shuffledAliveWorkers(curPos)
           isClusterIdle = worker.drivers.isEmpty && worker.executors.isEmpty
           numWorkersVisited += 1
+          // 是否可以运行driver
           if (canLaunchDriver(worker, driver.desc)) {
+            // worker获取资源,分配的数量
             val allocated = worker.acquireResources(driver.desc.resourceReqs)
+            // 使用资源
             driver.withResources(allocated)
+            // 启动driver
             launchDriver(worker, driver)
             waitingDrivers -= driver
             launched = true
@@ -983,6 +1004,7 @@ private[deploy] class Master(
           aliveWorkers.find(canLaunchDriver(_, driver.desc)) match {
             case Some(worker) =>
               driver.withResources(worker.acquireResources(driver.desc.resourceReqs))
+              // 启动driver
               launchDriver(worker, driver)
               waitingDrivers -= driver
             case _ =>
@@ -992,6 +1014,7 @@ private[deploy] class Master(
         }
       }
     }
+    // 启动在worker上启动 executor
     startExecutorsOnWorkers()
   }
 
@@ -1357,13 +1380,17 @@ private[deploy] class Master(
     val now = System.currentTimeMillis()
     val date = new Date(now)
     val id = newDriverId(date)
+    // 创建一个驱动信息
     new DriverInfo(now, id, maybeUpdateAppName(desc, id), date)
   }
 
   private def launchDriver(worker: WorkerInfo, driver: DriverInfo): Unit = {
+    // 开始启动driver
     logInfo(log"Launching driver ${MDC(LogKeys.DRIVER_ID, driver.id)} on worker ${MDC(LogKeys.WORKER_ID, worker.id)}")
+    // 添加driver
     worker.addDriver(driver)
     driver.worker = Some(worker)
+    // 向worker端点发送 LaunchDriver 消息
     worker.endpoint.send(LaunchDriver(driver.id, driver.desc, driver.resources))
     driver.state = DriverState.RUNNING
   }
@@ -1410,6 +1437,7 @@ private[deploy] object Master extends Logging {
     Utils.initDaemon(log)
     val conf = new SparkConf
     val args = new MasterArguments(argStrings, conf)
+    // 启动服务
     val (rpcEnv, _, _) = startRpcEnvAndEndpoint(args.host, args.port, args.webUiPort, conf)
     rpcEnv.awaitTermination()
   }
@@ -1427,7 +1455,9 @@ private[deploy] object Master extends Logging {
       conf: SparkConf): (RpcEnv, Int, Option[Int]) = {
     val securityMgr = new SecurityManager(conf)
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, host, port, conf, securityMgr)
+    // master端点
     val masterEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME,
+      // master 端点
       new Master(rpcEnv, rpcEnv.address, webUiPort, securityMgr, conf))
     val portsResponse = masterEndpoint.askSync[BoundPortsResponse](BoundPortsRequest)
     (rpcEnv, portsResponse.webUIPort, portsResponse.restPort)

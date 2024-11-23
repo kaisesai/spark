@@ -31,6 +31,9 @@ import org.apache.spark.util._
  * This is used in standalone cluster mode only.
  */
 object DriverWrapper extends Logging {
+
+
+  // dirver 包装类,用于独立集群模式,与 worker进程共享命运
   def main(args: Array[String]): Unit = {
     args.toList match {
       /*
@@ -40,15 +43,20 @@ object DriverWrapper extends Logging {
        * here must also remain consistent across versions.
        */
       case workerUrl :: userJar :: mainClass :: extraArgs =>
+        // 创建 spark 配置信息
         val conf = new SparkConf()
         val host: String = Utils.localHostName()
         val port: Int = sys.props.getOrElse(config.DRIVER_PORT.key, "0").toInt
+        // 创建 netty服务
         val rpcEnv = RpcEnv.create("Driver", host, port, conf, new SecurityManager(conf))
         logInfo(log"Driver address: ${MDC(RPC_ADDRESS, rpcEnv.address)}")
+        // 注册 worker监听器端点
         rpcEnv.setupEndpoint("workerWatcher", new WorkerWatcher(rpcEnv, workerUrl))
 
         val currentLoader = Thread.currentThread.getContextClassLoader
+        // 用户jar
         val userJarUrl = new File(userJar).toURI().toURL()
+        // 类加载器
         val loader =
           if (sys.props.getOrElse(config.DRIVER_USER_CLASS_PATH_FIRST.key, "false").toBoolean) {
             new ChildFirstURLClassLoader(Array(userJarUrl), currentLoader)
@@ -56,11 +64,15 @@ object DriverWrapper extends Logging {
             new MutableURLClassLoader(Array(userJarUrl), currentLoader)
           }
         Thread.currentThread.setContextClassLoader(loader)
+        // 设置依赖
         setupDependencies(loader, userJar)
 
+        // 自己的业务类
         // Delegate to supplied main class
         val clazz = Utils.classForName(mainClass)
+        // 获取main方法
         val mainMethod = clazz.getMethod("main", classOf[Array[String]])
+        // 执行
         mainMethod.invoke(null, extraArgs.toArray[String])
 
         rpcEnv.shutdown()

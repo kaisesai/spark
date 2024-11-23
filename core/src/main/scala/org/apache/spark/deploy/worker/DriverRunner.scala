@@ -87,6 +87,7 @@ private[deploy] class DriverRunner(
 
   /** Starts a thread to run and manage the driver. */
   private[worker] def start() = {
+    // 启动一个新的线程
     new Thread("DriverRunner for " + driverId) {
       override def run(): Unit = {
         var shutdownHook: AnyRef = null
@@ -96,6 +97,7 @@ private[deploy] class DriverRunner(
             kill()
           }
 
+          // 准备启动程序
           // prepare driver jars and run driver
           val exitCode = prepareAndRunDriver()
 
@@ -119,6 +121,7 @@ private[deploy] class DriverRunner(
         }
 
         // notify worker of final driver state, possible exception
+        // 发送 启动已经启动的消息
         worker.send(DriverStateChanged(driverId, finalState.get, finalException))
       }
     }.start()
@@ -176,9 +179,13 @@ private[deploy] class DriverRunner(
     localJarFile.getAbsolutePath
   }
 
+  // 准备启动驱动器
   private[worker] def prepareAndRunDriver(): Int = {
+    // 创建目录
     val driverDir = createWorkingDirectory()
+    // 下载jar包
     val localJarFilename = downloadUserJar(driverDir)
+    // 准备资源文件
     val resourceFileOpt = prepareResourcesFile(SPARK_DRIVER_PREFIX, resources, driverDir)
 
     def substituteVariables(argument: String): String = argument match {
@@ -191,6 +198,7 @@ private[deploy] class DriverRunner(
     val javaOpts = driverDesc.command.javaOpts ++ resourceFileOpt.map(f =>
       Seq(s"-D${DRIVER_RESOURCES_FILE.key}=${f.getAbsolutePath}")).getOrElse(Seq.empty)
     // TODO: If we add ability to submit multiple jars they should also be added here
+    // 进程构建器
     val builder = CommandUtils.buildProcessBuilder(driverDesc.command.copy(javaOpts = javaOpts),
       securityManager, driverDesc.mem, sparkHome.getAbsolutePath, substituteVariables)
 
@@ -202,11 +210,13 @@ private[deploy] class DriverRunner(
     builder.environment.put("SPARK_DRIVER_LOG_URL_STDERR",
       s"$workerUrlRef/logPage/?driverId=$driverId&logType=stderr")
 
+    // 运行驱动
     runDriver(builder, driverDir, driverDesc.supervise)
   }
 
   private def runDriver(builder: ProcessBuilder, baseDir: File, supervise: Boolean): Int = {
     builder.directory(baseDir)
+    // 初始化进程
     def initialize(process: Process): Unit = {
       // Redirect stdout and stderr to files
       val stdout = new File(baseDir, "stdout")
@@ -219,9 +229,11 @@ private[deploy] class DriverRunner(
       Files.asCharSink(stderr, StandardCharsets.UTF_8, FileWriteMode.APPEND).write(header)
       CommandUtils.redirectStream(process.getErrorStream, stderr)
     }
+    // 运行命令
     runCommandWithRetry(ProcessBuilderLike(builder), initialize, supervise)
   }
 
+  // 运行进程命令
   private[worker] def runCommandWithRetry(
       command: ProcessBuilderLike, initialize: Process => Unit, supervise: Boolean): Int = {
     var exitCode = -1
@@ -238,7 +250,9 @@ private[deploy] class DriverRunner(
 
       synchronized {
         if (killed) { return exitCode }
+        // 启动进程
         process = Some(command.start())
+        // 初始化进程
         initialize(process.get)
       }
 

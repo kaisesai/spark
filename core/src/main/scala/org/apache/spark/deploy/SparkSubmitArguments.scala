@@ -236,6 +236,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     }
 
     // Action should be SUBMIT unless otherwise specified
+    // 默认是 submit
     action = Option(action).getOrElse(SUBMIT)
   }
 

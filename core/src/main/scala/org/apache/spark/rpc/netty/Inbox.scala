@@ -77,6 +77,7 @@ private[netty] class Inbox(val endpointName: String, val endpoint: RpcEndpoint)
 
   // OnStart should be the first message to process
   inbox.synchronized {
+    // 每个 inbox 创建之后, 都会执行初始化时, 往 messages 中添加了一个 OnStart 的消息
     messages.add(OnStart)
   }
 
@@ -117,6 +118,7 @@ private[netty] class Inbox(val endpointName: String, val endpoint: RpcEndpoint)
               throw new SparkException(s"Unsupported message $message from ${_sender}")
             })
 
+          // 启动函数,每个 inbox 在创建之后,都要进行的动作
           case OnStart =>
             endpoint.onStart()
             if (!endpoint.isInstanceOf[ThreadSafeRpcEndpoint]) {
@@ -168,6 +170,7 @@ private[netty] class Inbox(val endpointName: String, val endpoint: RpcEndpoint)
       // We already put "OnStop" into "messages", so we should drop further messages
       onDrop(message)
     } else {
+      // 添加消息
       messages.add(message)
       false
     }

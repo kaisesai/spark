@@ -119,13 +119,16 @@ private[netty] class NettyRpcEnv(
   }
 
   def startServer(bindAddress: String, port: Int): Unit = {
+    // 启动netty服务
     val bootstraps: java.util.List[TransportServerBootstrap] =
       if (securityManager.isAuthenticationEnabled()) {
         java.util.Arrays.asList(new AuthServerBootstrap(transportConf, securityManager))
       } else {
         java.util.Collections.emptyList()
       }
+    // 启动服务
     server = transportContext.createServer(bindAddress, port, bootstraps)
+    // 注册端点
     dispatcher.registerRpcEndpoint(
       RpcEndpointVerifier.NAME, new RpcEndpointVerifier(this, dispatcher))
   }
@@ -136,12 +139,16 @@ private[netty] class NettyRpcEnv(
   }
 
   override def setupEndpoint(name: String, endpoint: RpcEndpoint): RpcEndpointRef = {
+    // 注册端点
     dispatcher.registerRpcEndpoint(name, endpoint)
   }
 
   def asyncSetupEndpointRefByURI(uri: String): Future[RpcEndpointRef] = {
+    // 地址
     val addr = RpcEndpointAddress(uri)
+    // 端点引用
     val endpointRef = new NettyRpcEndpointRef(conf, addr, this)
+    // 验证器
     val verifier = new NettyRpcEndpointRef(
       conf, RpcEndpointAddress(addr.rpcAddress, RpcEndpointVerifier.NAME), this)
     verifier.ask[Boolean](RpcEndpointVerifier.CheckExistence(endpointRef.name)).flatMap { find =>
@@ -488,6 +495,11 @@ private[netty] object NettyRpcEnv extends Logging {
 
 private[rpc] class NettyRpcEnvFactory extends RpcEnvFactory with Logging {
 
+  /**
+   * 启动 netty 服务
+   * @param config
+   * @return
+   */
   def create(config: RpcEnvConfig): RpcEnv = {
     val sparkConf = config.conf
     // Use JavaSerializerInstance in multiple threads is safe. However, if we plan to support
@@ -499,10 +511,12 @@ private[rpc] class NettyRpcEnvFactory extends RpcEnvFactory with Logging {
         config.securityManager, config.numUsableCores)
     if (!config.clientMode) {
       val startNettyRpcEnv: Int => (NettyRpcEnv, Int) = { actualPort =>
+        // 启动server服务
         nettyEnv.startServer(config.bindAddress, actualPort)
         (nettyEnv, nettyEnv.address.port)
       }
       try {
+        // 启动服务
         Utils.startServiceOnPort(config.port, startNettyRpcEnv, sparkConf, config.name)._1
       } catch {
         case NonFatal(e) =>

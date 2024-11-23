@@ -46,9 +46,12 @@ object CommandUtils extends Logging {
       substituteArguments: String => String,
       classPaths: Seq[String] = Seq.empty,
       env: Map[String, String] = sys.env): ProcessBuilder = {
+    // 加载命令
     val localCommand = buildLocalCommand(
       command, securityMgr, substituteArguments, classPaths, env)
+    // 构建命令
     val commandSeq = buildCommandSeq(localCommand, memory, sparkHome)
+    // 创建一个进程构建器
     val builder = new ProcessBuilder(commandSeq: _*)
     val environment = builder.environment()
     for ((key, value) <- localCommand.environment) {
@@ -60,7 +63,9 @@ object CommandUtils extends Logging {
   private def buildCommandSeq(command: Command, memory: Int, sparkHome: String): Seq[String] = {
     // SPARK-698: do not call the run.cmd script, as process.destroy()
     // fails to kill a process tree on Windows
+    // 命令
     val cmd = new WorkerCommandBuilder(sparkHome, memory, command).buildCommand()
+    // 增加主类信息, 参数信息
     (cmd.asScala ++ Seq(command.mainClass) ++ command.arguments).toSeq
   }
 

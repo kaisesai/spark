@@ -287,6 +287,7 @@ public class TransportContext implements Closeable {
    * properties (such as the remoteAddress()) may not be available yet.
    */
   private TransportChannelHandler createChannelHandler(Channel channel, RpcHandler rpcHandler) {
+    // 响应处理器
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);
     TransportClient client = new TransportClient(channel, responseHandler);
     boolean separateChunkFetchRequest = conf.separateChunkFetchRequest();
@@ -296,8 +297,10 @@ public class TransportContext implements Closeable {
         client, rpcHandler.getStreamManager(),
         conf.maxChunksBeingTransferred(), false /* syncModeEnabled */);
     }
+    // 请求处理器
     TransportRequestHandler requestHandler = new TransportRequestHandler(channel, client,
       rpcHandler, conf.maxChunksBeingTransferred(), chunkFetchRequestHandler);
+    // 通道处理器
     return new TransportChannelHandler(client, responseHandler, requestHandler,
       conf.connectionTimeoutMs(), separateChunkFetchRequest, closeIdleConnections, this);
   }

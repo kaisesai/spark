@@ -96,6 +96,7 @@ abstract class AbstractCommandBuilder {
    * class.
    */
   List<String> buildJavaCommand(String extraClassPath) throws IOException {
+    // Java 命令
     List<String> cmd = new ArrayList<>();
 
     String firstJavaHome = firstNonEmpty(javaHome,
@@ -121,6 +122,7 @@ abstract class AbstractCommandBuilder {
 
     cmd.add("-cp");
     cmd.add(join(File.pathSeparator, buildClassPath(extraClassPath)));
+    // 最终构建成一个启动 Java的命令
     return cmd;
   }
 

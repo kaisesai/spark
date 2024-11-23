@@ -44,6 +44,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
     new ConcurrentHashMap[RpcEndpoint, RpcEndpointRef]
 
   private val shutdownLatch = new CountDownLatch(1)
+  // 共享的消息循环器
   private lazy val sharedLoop = new SharedMessageLoop(nettyEnv.conf, this, numUsableCores)
 
   /**
@@ -55,6 +56,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
 
   def registerRpcEndpoint(name: String, endpoint: RpcEndpoint): NettyRpcEndpointRef = {
     val addr = RpcEndpointAddress(nettyEnv.address, name)
+    // 引用
     val endpointRef = new NettyRpcEndpointRef(nettyEnv.conf, addr, nettyEnv)
     synchronized {
       if (stopped) {
@@ -64,6 +66,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
         throw new IllegalArgumentException(s"There is already an RpcEndpoint called $name")
       }
 
+      // 放入端点
       // This must be done before assigning RpcEndpoint to MessageLoop, as MessageLoop sets Inbox be
       // active when registering, and endpointRef must be put into endpointRefs before onStart is
       // called.
@@ -75,9 +78,11 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
           case e: IsolatedRpcEndpoint =>
             new DedicatedMessageLoop(name, e, this)
           case _ =>
+            // 注册共享loop
             sharedLoop.register(name, endpoint)
             sharedLoop
         }
+        // 保存到本地变量中
         endpoints.put(name, messageLoop)
       } catch {
         case NonFatal(e) =>
@@ -174,12 +179,14 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       message: InboxMessage,
       callbackIfStopped: (Exception) => Unit): Unit = {
     val error = synchronized {
+      // 获取端点
       val loop = endpoints.get(endpointName)
       if (stopped) {
         Some(new RpcEnvStoppedException())
       } else if (loop == null) {
         Some(new SparkException(s"Could not find $endpointName."))
       } else {
+        // 发送消息
         loop.post(endpointName, message)
         None
       }

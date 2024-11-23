@@ -39,7 +39,10 @@ private sealed abstract class MessageLoop(dispatcher: Dispatcher) extends Loggin
 
   // Message loop task; should be run in all threads of the message loop's pool.
   protected val receiveLoopRunnable = new Runnable() {
-    override def run(): Unit = receiveLoop()
+    override def run(): Unit = {
+      // 运行 loop 方法
+      receiveLoop()
+    }
   }
 
   protected val threadpool: ExecutorService
@@ -60,15 +63,20 @@ private sealed abstract class MessageLoop(dispatcher: Dispatcher) extends Loggin
     }
     threadpool.awaitTermination(Long.MaxValue, TimeUnit.MILLISECONDS)
   }
+  protected final def setActive(inbox: Inbox): Unit = {
+    // 激活 receiveLoop 方法 将inbox 添加到阻塞队列中
+    active.offer(inbox)
+  }
 
-  protected final def setActive(inbox: Inbox): Unit = active.offer(inbox)
-
+  // 接收循环
   private def receiveLoop(): Unit = {
     try {
+      // 无限循环
       while (true) {
         try {
           val inbox = active.take()
           if (inbox == MessageLoop.PoisonPill) {
+            // 占位消息符号
             // Put PoisonPill back so that other threads can see it.
             setActive(MessageLoop.PoisonPill)
             return
@@ -184,6 +192,7 @@ private class DedicatedMessageLoop(
 
   override def post(endpointName: String, message: InboxMessage): Unit = {
     require(endpointName == name)
+    // 把消息放入信箱
     inbox.post(message)
     setActive(inbox)
   }

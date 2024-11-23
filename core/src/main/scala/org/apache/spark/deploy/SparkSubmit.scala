@@ -166,6 +166,7 @@ private[spark] class SparkSubmit extends Logging {
   @tailrec
   private def submit(args: SparkSubmitArguments, uninitLog: Boolean, sparkConf: SparkConf): Unit = {
 
+    // 提交任务
     def doRunMain(): Unit = {
       if (args.proxyUser != null) {
         // Here we are checking for client mode because when job is sumbitted in cluster
@@ -250,9 +251,10 @@ private[spark] class SparkSubmit extends Logging {
     val childClasspath = new ArrayBuffer[String]()
     val sparkConf = args.toSparkConf()
     if (sparkConf.contains("spark.local.connect")) sparkConf.remove("spark.remote")
+    // 主类
     var childMainClass = ""
 
-    // Set the cluster manager
+    // Set the cluster manager 集群管理器
     val clusterManager: Int = args.maybeMaster match {
       case Some(v) =>
         assert(args.maybeRemote.isEmpty || sparkConf.contains("spark.local.connect"))
@@ -268,6 +270,7 @@ private[spark] class SparkSubmit extends Logging {
       case None => LOCAL // default master or remote mode.
     }
 
+    // 部署方式:client或者 cluster
     // Set the deploy mode; default is client mode
     val deployMode: Int = args.deployMode match {
       case "client" | null => CLIENT
@@ -374,7 +377,7 @@ private[spark] class SparkSubmit extends Logging {
       }
     }
 
-    // update spark config from args
+    // update spark config from args 更新spark配置参数
     args.toSparkConf(Option(sparkConf))
     val hadoopConf = conf.getOrElse(SparkHadoopUtil.newConfiguration(sparkConf))
     val targetDir = Utils.createTempDir()
@@ -401,7 +404,7 @@ private[spark] class SparkSubmit extends Logging {
     args.archives = Option(args.archives).map(resolveGlobPaths(_, hadoopConf)).orNull
 
 
-    // In client mode, download remote files.
+    // In client mode, download remote files. 客户端模式,下载远程文件
     var localPrimaryResource: String = null
     var localJars: String = null
     var localPyFiles: String = null
@@ -539,6 +542,7 @@ private[spark] class SparkSubmit extends Logging {
         val fs = FileSystem.get(uri, hadoopConf)
 
         Utils.tryWithResource(new JarInputStream(fs.open(new Path(uri)))) { jar =>
+          // 从 manifest 文件上找主类
           args.mainClass = jar.getManifest.getMainAttributes.getValue("Main-Class")
         }
       } catch {
@@ -724,6 +728,7 @@ private[spark] class SparkSubmit extends Logging {
     // In client mode, launch the application main class directly
     // In addition, add the main application jar and any added jars (if any) to the classpath
     if (deployMode == CLIENT) {
+      // 参数的主类为 子主类
       childMainClass = args.mainClass
       if (localPrimaryResource != null && isUserJar(localPrimaryResource)) {
         childClasspath += localPrimaryResource
@@ -786,12 +791,14 @@ private[spark] class SparkSubmit extends Logging {
 
     // In standalone cluster mode, use the REST client to submit the application (Spark 1.3+).
     // All Spark parameters are expected to be passed to the client through system properties.
+    // 独立集群模式
     if (args.isStandaloneCluster) {
       if (args.useRest) {
         childMainClass = REST_CLUSTER_SUBMIT_CLASS
         childArgs += args.primaryResource += args.mainClass
       } else {
         // In legacy standalone cluster mode, use Client as a wrapper around the user class
+        // 通常的独立模式,ClientApp 类
         childMainClass = STANDALONE_CLUSTER_SUBMIT_CLASS
         if (args.supervise) { childArgs += "--supervise" }
         Option(args.driverMemory).foreach { m => childArgs += "--memory" += m }
@@ -870,6 +877,7 @@ private[spark] class SparkSubmit extends Logging {
     }
 
     // Ignore invalid spark.driver.host in cluster modes.
+    // 集群部署
     if (deployMode == CLUSTER) {
       sparkConf.remove(DRIVER_HOST_ADDRESS)
     }
@@ -946,6 +954,7 @@ private[spark] class SparkSubmit extends Logging {
         new MutableURLClassLoader(new Array[URL](0),
           Thread.currentThread.getContextClassLoader)
       }
+    // 将当前类加载器放入本地线程上下文加载器中
     Thread.currentThread.setContextClassLoader(loader)
     loader
   }
@@ -963,6 +972,7 @@ private[spark] class SparkSubmit extends Logging {
    * running cluster deploy mode or python applications.
    */
   private def runMain(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
+    // 准备环境变量
     val (childArgs, childClasspath, sparkConf, childMainClass) = prepareSubmitEnvironment(args)
     // Let the main class re-initialize the logging system once it starts.
     if (uninitLog) {
@@ -982,14 +992,19 @@ private[spark] class SparkSubmit extends Logging {
       sparkConf.get(ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE),
       s"Classpath of spark-submit should not change in cluster mode if proxy user is specified " +
         s"when ${ALLOW_CUSTOM_CLASSPATH_BY_PROXY_USER_IN_CLUSTER_MODE.key} is disabled")
+
+    // 获取类加载器
     val loader = getSubmitClassLoader(sparkConf)
     for (jar <- childClasspath) {
+      // 将jar 包加入到类路径上
       addJarToClasspath(jar, loader)
     }
 
+    // 主类
     var mainClass: Class[_] = null
 
     try {
+      // 加载主类,独立集群模式下 childMainClass 类是 ClientApp
       mainClass = Utils.classForName(childMainClass)
     } catch {
       case e: ClassNotFoundException =>
@@ -1012,9 +1027,12 @@ private[spark] class SparkSubmit extends Logging {
         throw new SparkUserAppException(CLASS_NOT_FOUND_EXIT_STATUS)
     }
 
+    // 程序启动类作为一个app
     val app: SparkApplication = if (classOf[SparkApplication].isAssignableFrom(mainClass)) {
+      // SparkApplication 类型的app, 像 ClientApp
       mainClass.getConstructor().newInstance().asInstanceOf[SparkApplication]
     } else {
+      // JavaMainApplication 类型的app
       new JavaMainApplication(mainClass)
     }
 
@@ -1029,6 +1047,7 @@ private[spark] class SparkSubmit extends Logging {
     }
 
     try {
+      // 执行 ClientApp 启动
       app.start(childArgs.toArray, sparkConf)
     } catch {
       case t: Throwable =>
