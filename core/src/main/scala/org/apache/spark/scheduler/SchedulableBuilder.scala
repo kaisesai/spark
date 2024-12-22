@@ -46,6 +46,7 @@ private[spark] trait SchedulableBuilder {
   def addTaskSetManager(manager: Schedulable, properties: Properties): Unit
 }
 
+// 先进先出调度去
 private[spark] class FIFOSchedulableBuilder(val rootPool: Pool)
   extends SchedulableBuilder with Logging {
 
@@ -54,10 +55,17 @@ private[spark] class FIFOSchedulableBuilder(val rootPool: Pool)
   }
 
   override def addTaskSetManager(manager: Schedulable, properties: Properties): Unit = {
+    // 池子添加调度器
     rootPool.addSchedulable(manager)
   }
 }
 
+/**
+ * 公平调度器
+ *
+ * @param rootPool
+ * @param sc
+ */
 private[spark] class FairSchedulableBuilder(val rootPool: Pool, sc: SparkContext)
   extends SchedulableBuilder with Logging {
 
@@ -70,10 +78,12 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, sc: SparkContext
   val WEIGHT_PROPERTY = "weight"
   val POOL_NAME_PROPERTY = "@name"
   val POOLS_PROPERTY = "pool"
+  // 调度器
   val DEFAULT_SCHEDULING_MODE = SchedulingMode.FIFO
   val DEFAULT_MINIMUM_SHARE = 0
   val DEFAULT_WEIGHT = 1
 
+  // 公平
   override def buildPools(): Unit = {
     var fileData: Option[(InputStream, String)] = None
     try {
@@ -101,6 +111,7 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, sc: SparkContext
         }
       }
 
+      // 创建公平调度线程池
       fileData.foreach { case (is, fileName) => buildFairSchedulerPool(is, fileName) }
     } catch {
       case NonFatal(t) =>
@@ -116,14 +127,17 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, sc: SparkContext
       fileData.foreach { case (is, fileName) => is.close() }
     }
 
+    // 构建默认线程池
     // finally create "default" pool
     buildDefaultPool()
   }
 
   private def buildDefaultPool(): Unit = {
     if (rootPool.getSchedulableByName(DEFAULT_POOL_NAME) == null) {
+      // 池对象
       val pool = new Pool(DEFAULT_POOL_NAME, DEFAULT_SCHEDULING_MODE,
         DEFAULT_MINIMUM_SHARE, DEFAULT_WEIGHT)
+      // 添加到调度器
       rootPool.addSchedulable(pool)
       logInfo(log"Created default pool: ${MDC(LogKeys.POOL_NAME, DEFAULT_POOL_NAME)}, " +
         log"schedulingMode: ${MDC(LogKeys.SCHEDULING_MODE, DEFAULT_SCHEDULING_MODE)}, " +

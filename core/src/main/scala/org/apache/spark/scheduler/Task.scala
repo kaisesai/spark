@@ -75,6 +75,7 @@ private[spark] abstract class Task[T](
   @transient lazy val metrics: TaskMetrics =
     SparkEnv.get.closureSerializer.newInstance().deserialize(ByteBuffer.wrap(serializedTaskMetrics))
 
+  // 任务运行
   /**
    * Called by [[org.apache.spark.executor.Executor]] to run this task.
    *
@@ -101,6 +102,7 @@ private[spark] abstract class Task[T](
     blockManager.registerTask(taskAttemptId)
     // TODO SPARK-24874 Allow create BarrierTaskContext based on partitions, instead of whether
     // the stage is barrier.
+    // 任务上下文
     val taskContext = new TaskContextImpl(
       stageId,
       stageAttemptId, // stageAttemptId and stageAttemptNumber are semantically equal
@@ -115,6 +117,7 @@ private[spark] abstract class Task[T](
       cpus,
       resources)
 
+    // 上下文
     context = if (isBarrier) {
       new BarrierTaskContext(taskContext)
     } else {
@@ -129,6 +132,7 @@ private[spark] abstract class Task[T](
       kill(interruptThread = false, _reasonIfKilled)
     }
 
+    // 调用上下文
     new CallerContext(
       "TASK",
       SparkEnv.get.conf.get(APP_CALLER_CONTEXT),
@@ -140,9 +144,11 @@ private[spark] abstract class Task[T](
       Option(taskAttemptId),
       Option(attemptNumber)).setCurrentContext()
 
+    // 插件
     plugins.foreach(_.onTaskStart())
 
     try {
+      // 运行任务
       context.runTaskWithListeners(this)
     } finally {
       try {

@@ -38,9 +38,10 @@ private[spark] case class WorkerResourceInfo(name: String, addresses: Seq[String
   def acquire(amount: Int): ResourceInformation = {
     // Any available address from availableAddrs must be a whole resource
     // since worker needs to do full resources to the executors.
+    // 获取地址
     val addresses = availableAddrs.take(amount)
     assert(addresses.length == amount)
-
+    // 获取资源
     acquire(addresses.map(addr => addr -> ONE_ENTIRE_RESOURCE).toMap)
     new ResourceInformation(resourceName, addresses.toArray)
   }

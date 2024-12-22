@@ -370,8 +370,10 @@ private[spark] class Executor(
   private[executor] def createTaskRunner(context: ExecutorBackend,
     taskDescription: TaskDescription) = new TaskRunner(context, taskDescription, plugins)
 
+  // 运行任务
   def launchTask(context: ExecutorBackend, taskDescription: TaskDescription): Unit = {
     val taskId = taskDescription.taskId
+    // 创建任务执行器
     val tr = createTaskRunner(context, taskDescription)
     runningTasks.put(taskId, tr)
     val killMark = killMarks.get(taskId)
@@ -379,6 +381,7 @@ private[spark] class Executor(
       tr.kill(killMark._1, killMark._2)
       killMarks.remove(taskId)
     }
+    // 线程池执行任务
     threadPool.execute(tr)
     if (decommissioned) {
       log.error(s"Launching a task while in decommissioned state.")
@@ -469,6 +472,7 @@ private[spark] class Executor(
     ManagementFactory.getGarbageCollectorMXBeans.asScala.map(_.getCollectionTime).sum
   }
 
+  // 任务运行器
   class TaskRunner(
       execBackend: ExecutorBackend,
       val taskDescription: TaskDescription,
@@ -556,6 +560,7 @@ private[spark] class Executor(
       (accums, accUpdates)
     }
 
+    // 执行任务
     override def run(): Unit = {
 
       // Classloader isolation
@@ -569,11 +574,13 @@ private[spark] class Executor(
       threadId = Thread.currentThread.getId
       Thread.currentThread.setName(threadName)
       val threadMXBean = ManagementFactory.getThreadMXBean
+      // 任务内存管理器
       val taskMemoryManager = new TaskMemoryManager(env.memoryManager, taskId)
       val deserializeStartTimeNs = System.nanoTime()
       val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
         threadMXBean.getCurrentThreadCpuTime
       } else 0L
+      // 设置上下文类加载器
       Thread.currentThread.setContextClassLoader(isolatedSession.replClassLoader)
       val ser = env.closureSerializer.newInstance()
       logInfo(log"Running ${LogMDC(TASK_NAME, taskName)}")
@@ -595,9 +602,12 @@ private[spark] class Executor(
           isolatedSession)
         // Always reset the thread class loader to ensure if any updates, all threads (not only
         // the thread that updated the dependencies) can update to the new class loader.
+        // 设置上下文类加载器
         Thread.currentThread.setContextClassLoader(isolatedSession.replClassLoader)
+        // 反序列化任务
         task = ser.deserialize[Task[Any]](
           taskDescription.serializedTask, Thread.currentThread.getContextClassLoader)
+
         task.localProperties = taskDescription.properties
         task.setTaskMemoryManager(taskMemoryManager)
 
@@ -621,6 +631,7 @@ private[spark] class Executor(
           env.mapOutputTracker.asInstanceOf[MapOutputTrackerWorker].updateEpoch(task.epoch)
         }
 
+        // 监控器
         metricsPoller.onTaskStart(taskId, task.stageId, task.stageAttemptId)
         taskStarted = true
 
@@ -634,6 +645,8 @@ private[spark] class Executor(
         val resources = taskDescription.resources.map { case (rName, addressesAmounts) =>
           rName -> new ResourceInformation(rName, addressesAmounts.keys.toSeq.sorted.toArray)
         }
+
+        // 任务执行结果
         val value = Utils.tryWithSafeFinally {
           val res = task.run(
             taskAttemptId = taskId,
@@ -689,6 +702,7 @@ private[spark] class Executor(
 
         val resultSer = env.serializer.newInstance()
         val beforeSerializationNs = System.nanoTime()
+        // 值序列化,结果值
         val valueByteBuffer = SerializerHelper.serializeToChunkedBuffer(resultSer, value)
         val afterSerializationNs = System.nanoTime()
 
@@ -733,12 +747,15 @@ private[spark] class Executor(
         val accumUpdates = task.collectAccumulatorUpdates()
         val metricPeaks = metricsPoller.getTaskMetricPeaks(taskId)
         // TODO: do not serialize value twice
+        // 直接任务结果?
         val directResult = new DirectTaskResult(valueByteBuffer, accumUpdates, metricPeaks)
         // try to estimate a reasonable upper bound of DirectTaskResult serialization
+        // 结果序列化
         val serializedDirectResult = SerializerHelper.serializeToChunkedBuffer(ser, directResult,
           valueByteBuffer.size + accumUpdates.size * 32 + metricPeaks.length * 8)
         val resultSize = serializedDirectResult.size
 
+        // 序列化结果
         // directSend = sending directly back to the driver
         val serializedResult: ByteBuffer = {
           if (maxResultSize > 0 && resultSize > maxResultSize) {
@@ -761,6 +778,7 @@ private[spark] class Executor(
             logInfo(log"Finished ${LogMDC(TASK_NAME, taskName)}." +
               log" ${LogMDC(NUM_BYTES, resultSize)} bytes result sent to driver")
             // toByteBuffer is safe here, guarded by maxDirectResultSize
+            // 正常讲结果转成 bytebuffer
             serializedDirectResult.toByteBuffer
           }
         }
@@ -768,6 +786,7 @@ private[spark] class Executor(
         executorSource.SUCCEEDED_TASKS.inc(1L)
         setTaskFinishedAndClearInterruptStatus()
         plugins.foreach(_.onTaskSucceeded())
+        // 更新任务状态为完成,发送序列化的结果
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
       } catch {
         case t: TaskKilledException =>

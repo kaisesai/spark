@@ -36,11 +36,13 @@ public class LocalDiskShuffleDataIO implements ShuffleDataIO {
 
   @Override
   public ShuffleExecutorComponents executor() {
+    // 本地磁盘shuffle 执行器组件
     return new LocalDiskShuffleExecutorComponents(sparkConf);
   }
 
   @Override
   public ShuffleDriverComponents driver() {
+    // shuffle 驱动组件
     return new LocalDiskShuffleDriverComponents();
   }
 }

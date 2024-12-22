@@ -67,7 +67,7 @@ object DriverWrapper extends Logging {
         // 设置依赖
         setupDependencies(loader, userJar)
 
-        // 自己的业务类
+        // 自己的业务类方法
         // Delegate to supplied main class
         val clazz = Utils.classForName(mainClass)
         // 获取main方法
@@ -75,6 +75,7 @@ object DriverWrapper extends Logging {
         // 执行
         mainMethod.invoke(null, extraArgs.toArray[String])
 
+        // 关闭netty服务
         rpcEnv.shutdown()
 
       case _ =>

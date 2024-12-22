@@ -289,18 +289,24 @@ private[deploy] class Master(
       handleRegisterWorker(id, workerHost, workerPort, workerRef, cores, memory, workerWebUiUrl,
         masterAddress, resources)
 
+    // 注册程序
     case RegisterApplication(description, driver) =>
       // TODO Prevent repeated registrations from some driver
       if (state == RecoveryState.STANDBY) {
         // ignore, don't send response
       } else {
         logInfo(log"Registering app ${MDC(LogKeys.APP_NAME, description.name)}")
+        // 创建一个appinfo
         val app = createApplication(description, driver)
+        // 注册一个 ApplicationInfo
         registerApplication(app)
         logInfo(log"Registered app ${MDC(LogKeys.APP_NAME, description.name)} with" +
           log" ID ${MDC(LogKeys.APP_ID, app.id)}")
+        // 持久化引擎添加app
         persistenceEngine.addApplication(app)
+        // 给driver发送已注册app的消息
         driver.send(RegisteredApplication(app.id, self))
+        // 定时调度
         schedule()
       }
 
@@ -762,6 +768,7 @@ private[deploy] class Master(
       resourceDesc: ExecutorResourceDescription,
       usableWorkers: Array[WorkerInfo],
       spreadOutApps: Boolean): Array[Int] = {
+    // 调度 executor
     val coresPerExecutor = resourceDesc.coresPerExecutor
     val minCoresPerExecutor = coresPerExecutor.getOrElse(1)
     val oneExecutorPerWorker = coresPerExecutor.isEmpty
@@ -806,11 +813,15 @@ private[deploy] class Master(
 
     // Keep launching executors until no more workers can accommodate any
     // more executors, or if we have reached this application's limits
+    // 分配worker
     var freeWorkers = (0 until numUsable).filter(canLaunchExecutorForApp)
     while (freeWorkers.nonEmpty) {
+      // 空余的worker
       freeWorkers.foreach { pos =>
         var keepScheduling = true
         while (keepScheduling && canLaunchExecutorForApp(pos)) {
+          // 保持调度 && 可以运行app
+
           coresToAssign -= minCoresPerExecutor
           assignedCores(pos) += minCoresPerExecutor
 
@@ -831,8 +842,10 @@ private[deploy] class Master(
           }
         }
       }
+      // 过滤空余的worker
       freeWorkers = freeWorkers.filter(canLaunchExecutorForApp)
     }
+    // 返回分配的核心数
     assignedCores
   }
 
@@ -844,18 +857,23 @@ private[deploy] class Master(
     // in the queue, then the second app, etc. And for each app, we will schedule base on
     // resource profiles also with a simple FIFO scheduler, resource profile with smaller id
     // first.
+    // 等待的app 启动,等待的 app
     for (app <- waitingApps) {
       for (rpId <- app.getRequestedRPIds()) {
         logInfo(log"Start scheduling for app ${MDC(LogKeys.APP_ID, app.id)} with" +
           log" rpId: ${MDC(LogKeys.RESOURCE_PROFILE_ID, rpId)}")
         val resourceDesc = app.getResourceDescriptionForRpId(rpId)
+        // 核心上每个执行器
         val coresPerExecutor = resourceDesc.coresPerExecutor.getOrElse(1)
 
         // If the cores left is less than the coresPerExecutor,the cores left will not be allocated
         if (app.coresLeft >= coresPerExecutor) {
+          // app剩余核心 >= 每个executor的核心数
           // Filter out workers that don't have enough resources to launch an executor
           val aliveWorkers = workers.toArray.filter(_.state == WorkerState.ALIVE)
+            // 可以运行 executor
             .filter(canLaunchExecutor(_, resourceDesc))
+          // worker选择策略
           val usableWorkers = workerSelectionPolicy match {
             case CORES_FREE_ASC => aliveWorkers.sortBy(w => (w.coresFree, w.id))
             case CORES_FREE_DESC => aliveWorkers.sortBy(w => (w.coresFree, w.id)).reverse
@@ -902,16 +920,21 @@ private[deploy] class Master(
       resourceDesc: ExecutorResourceDescription,
       worker: WorkerInfo,
       rpId: Int): Unit = {
+    // executor的每个核心
     val coresPerExecutor = resourceDesc.coresPerExecutor
     // If the number of cores per executor is specified, we divide the cores assigned
     // to this worker evenly among the executors with no remainder.
     // Otherwise, we launch a single executor that grabs all the assignedCores on this worker.
     val numExecutors = coresPerExecutor.map { assignedCores / _ }.getOrElse(1)
     val coresToAssign = coresPerExecutor.getOrElse(assignedCores)
+    // 循环 numExecutors
     for (i <- 1 to numExecutors) {
+      // 获取资源
       val allocated = worker.acquireResources(resourceDesc.customResourcesPerExecutor)
+      // 创建执行器信息
       val exec = app.addExecutor(
         worker, coresToAssign, resourceDesc.memoryMbPerExecutor, allocated, rpId)
+      // 运行 executor
       launchExecutor(worker, exec)
       app.state = ApplicationState.RUNNING
     }
@@ -923,10 +946,14 @@ private[deploy] class Master(
       coresReq: Int,
       resourceRequirements: Seq[ResourceRequirement])
     : Boolean = {
+    // 内存
     val enoughMem = worker.memoryFree >= memoryReq
+    // 核心
     val enoughCores = worker.coresFree >= coresReq
+    // 资源
     val enoughResources = ResourceUtils.resourcesMeetRequirements(
       worker.resourcesAmountFree, resourceRequirements)
+    // worker剩余内存足够 && 剩余核心足够 && 剩余资源
     enoughMem && enoughCores && enoughResources
   }
 
@@ -934,6 +961,7 @@ private[deploy] class Master(
    * @return whether the worker could launch the driver represented by DriverDescription
    */
   private def canLaunchDriver(worker: WorkerInfo, desc: DriverDescription): Boolean = {
+    // 是否可以运行
     canLaunch(worker, desc.mem, desc.cores, desc.resourceReqs)
   }
 
@@ -943,6 +971,7 @@ private[deploy] class Master(
   private def canLaunchExecutor(
       worker: WorkerInfo,
       resourceDesc: ExecutorResourceDescription): Boolean = {
+    // 可以运行
     canLaunch(
       worker,
       resourceDesc.memoryMbPerExecutor,
@@ -958,6 +987,7 @@ private[deploy] class Master(
     if (state != RecoveryState.ALIVE) {
       return
     }
+    // 开始调度
     // Drivers take strict precedence over executors
     if (spreadOutDrivers) {
       // 将worker打散
@@ -965,18 +995,22 @@ private[deploy] class Master(
       // worker的数量
       val numWorkersAlive = shuffledAliveWorkers.size
       var curPos = 0
-      // 遍历带等待的driver
+      // 遍历带等待的driver,每一个等待的driver
       for (driver <- waitingDrivers.toList) { // iterate over a copy of waitingDrivers
         // We assign workers to each waiting driver in a round-robin fashion. For each driver, we
         // start from the last worker that was assigned a driver, and continue onwards until we have
         // explored all alive workers.
+        // (全部的driver数量 - 等待中的driver数量) >= 最大driver数量
         var launched = (drivers.size - waitingDrivers.size) >= maxDrivers
         var isClusterIdle = !launched
         var numWorkersVisited = 0
+        // 循环(已访问的worker数量 < 活跃的worker数量 && 未启动)
         while (numWorkersVisited < numWorkersAlive && !launched) {
           // 洗牌worker
           val worker = shuffledAliveWorkers(curPos)
+          // 集群是否闲置: worker driver为空 && worker的 executors 为空
           isClusterIdle = worker.drivers.isEmpty && worker.executors.isEmpty
+          // 访问的worker数量+1
           numWorkersVisited += 1
           // 是否可以运行driver
           if (canLaunchDriver(worker, driver.desc)) {
@@ -989,6 +1023,7 @@ private[deploy] class Master(
             waitingDrivers -= driver
             launched = true
           }
+          // 当前指针,用于定位活跃的worker
           curPos = (curPos + 1) % numWorkersAlive
         }
         if (!launched && isClusterIdle) {
@@ -1021,9 +1056,12 @@ private[deploy] class Master(
   private def launchExecutor(worker: WorkerInfo, exec: ExecutorDesc): Unit = {
     logInfo(log"Launching executor ${MDC(LogKeys.EXECUTOR_ID, exec.fullId)}" +
       log" on worker ${MDC(LogKeys.WORKER_ID, worker.id)}")
+    // 添加执行器
     worker.addExecutor(exec)
+    // 给worker 发送  LaunchExecutor
     worker.endpoint.send(LaunchExecutor(masterUrl, exec.application.id, exec.id,
       exec.rpId, exec.application.desc, exec.cores, exec.memory, exec.resources))
+    // 给driver发送 ExecutorAdded
     exec.application.driver.send(
       ExecutorAdded(exec.id, worker.id, worker.hostPort, exec.cores, exec.memory))
   }
@@ -1167,6 +1205,7 @@ private[deploy] class Master(
     } else {
       newApplicationId(date)
     }
+    // 创建了 ApplicationInfo
     new ApplicationInfo(now, appId, desc, date, driver, defaultCores)
   }
 
@@ -1183,6 +1222,7 @@ private[deploy] class Master(
     idToApp(app.id) = app
     endpointToApp(app.driver) = app
     addressToApp(appAddress) = app
+    // 加到等待队列app中
     waitingApps += app
   }
 

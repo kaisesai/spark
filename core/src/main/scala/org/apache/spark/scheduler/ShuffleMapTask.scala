@@ -87,6 +87,8 @@ private[spark] class ShuffleMapTask(
       threadMXBean.getCurrentThreadCpuTime
     } else 0L
     val ser = SparkEnv.get.closureSerializer.newInstance()
+
+    // 反序列化 rdd 和 shuffle 依赖
     val rddAndDep = ser.deserialize[(RDD[_], ShuffleDependency[_, _, _])](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
     _executorDeserializeTimeNs = System.nanoTime() - deserializeStartTimeNs
@@ -103,6 +105,7 @@ private[spark] class ShuffleMapTask(
     } else {
       context.taskAttemptId()
     }
+    // 使用 shuffle 进行 write 操作
     dep.shuffleWriterProcessor.write(
       rdd.iterator(partition, context),
       dep,

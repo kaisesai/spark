@@ -47,14 +47,18 @@ abstract class LauncherConnection implements Closeable, Runnable {
     this.closed = false;
   }
 
+  // 处理消息,交给子类实现
   protected abstract void handle(Message msg) throws IOException;
 
   @Override
   public void run() {
     try {
+      // 执行任务
       FilteredObjectInputStream in = new FilteredObjectInputStream(socket.getInputStream());
       while (isOpen()) {
+        // 无限循环,读取并处理消息
         Message msg = (Message) in.readObject();
+        // 处理消息
         handle(msg);
       }
     } catch (EOFException eof) {

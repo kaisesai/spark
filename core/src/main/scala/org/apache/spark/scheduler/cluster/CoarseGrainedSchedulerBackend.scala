@@ -144,6 +144,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       ThreadUtils.newDaemonSingleThreadScheduledExecutor("cleanup-decommission-execs")
     }
 
+  // 驱动端点
   class DriverEndpoint extends IsolatedThreadSafeRpcEndpoint with Logging {
 
     override val rpcEnv: RpcEnv = CoarseGrainedSchedulerBackend.this.rpcEnv
@@ -163,11 +164,13 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       // Periodically revive offers to allow delay scheduling to work
       val reviveIntervalMs = conf.get(SCHEDULER_REVIVE_INTERVAL).getOrElse(1000L)
 
+      // 驱动端点
       reviveThread.scheduleAtFixedRate(() => Utils.tryLogNonFatalError {
         Option(self).foreach(_.send(ReviveOffers))
       }, 0, reviveIntervalMs, TimeUnit.MILLISECONDS)
     }
 
+    // 接收消息
     override def receive: PartialFunction[Any, Unit] = {
       case StatusUpdate(executorId, taskId, state, data, taskCpus, resources) =>
         scheduler.statusUpdate(taskId, state, data.value)
@@ -189,10 +192,13 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           }
         }
 
+      //   shuffle 推送完成
       case ShufflePushCompletion(shuffleId, shuffleMergeId, mapIndex) =>
         scheduler.dagScheduler.shufflePushCompleted(shuffleId, shuffleMergeId, mapIndex)
 
+      // 重新提供
       case ReviveOffers =>
+        // 生成提供
         makeOffers()
 
       case KillTask(taskId, executorId, interruptThread, reason) =>
@@ -238,6 +244,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         executorDataMap.get(executorId).foreach { data =>
           data.freeCores = data.totalCores
         }
+        // 设置接受者?
         makeOffers(executorId)
 
       case MiscellaneousProcessAdded(time: Long,
@@ -248,8 +255,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         logError(log"Received unexpected message. ${MDC(ERROR, e)}")
     }
 
+    // 接收并回复消息
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
 
+      // 注册执行器
       case RegisterExecutor(executorId, executorRef, hostname, cores, logUrls,
           attributes, resources, resourceProfileId) =>
         if (executorDataMap.contains(executorId)) {
@@ -265,6 +274,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         } else {
           // If the executor's rpc env is not listening for incoming connections, `hostPort`
           // will be null, and the client connection should be used to contact the executor.
+          // 执行器地址
           val executorAddress = if (executorRef.address != null) {
               executorRef.address
             } else {
@@ -282,6 +292,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           }
           // If we've requested the executor figure out when we did.
           val reqTs: Option[Long] = CoarseGrainedSchedulerBackend.this.synchronized {
+            // 请求次数
             execRequestTimes.get(resourceProfileId).flatMap {
               times =>
               times.headOption.map {
@@ -297,6 +308,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             }
           }
 
+          // 执行器数据
           val data = new ExecutorData(executorRef, executorAddress, hostname,
             0, cores, logUrlHandler.applyPattern(logUrls, attributes), attributes,
             resourcesInfo, resourceProfileId, registrationTs = System.currentTimeMillis(),
@@ -309,6 +321,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
               currentExecutorIdCounter = executorId.toInt
             }
           }
+          // 监听器总线
           listenerBus.post(
             SparkListenerExecutorAdded(System.currentTimeMillis(), executorId, data))
           // Note: some tests expect the reply to come after we put the executor in the map
@@ -321,10 +334,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           context.reply(true)
         }
 
+      // 停止driver
       case StopDriver =>
         context.reply(true)
         this.stop()
 
+      //   更新 executor日志级别
       case UpdateExecutorsLogLevel(logLevel) =>
         currentLogLevel = Some(logLevel)
         logInfo(log"Asking each executor to refresh the log level to " +
@@ -375,15 +390,19 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     // Make fake resource offers on all executors
     private def makeOffers(): Unit = {
       // Make sure no executor is killed while some task is launching on it
+      // 任务描述
       val taskDescs = withLock {
         // Filter out executors under killing
         val activeExecutors = executorDataMap.filter { case (id, _) => isExecutorActive(id) }
         val workOffers = activeExecutors.map {
+          // 构建 workerOffer
           case (id, executorData) => buildWorkerOffer(id, executorData)
         }.toIndexedSeq
+        // 调度器,资源offer
         scheduler.resourceOffers(workOffers, true)
       }
       if (taskDescs.nonEmpty) {
+        // 运行任务
         launchTasks(taskDescs)
       }
     }
@@ -411,10 +430,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     // Make fake resource offers on just one executor
     private def makeOffers(executorId: String): Unit = {
       // Make sure no executor is killed while some task is launching on it
+      // 获取task
       val taskDescs = withLock {
         // Filter out executors under killing
         if (isExecutorActive(executorId)) {
           val executorData = executorDataMap(executorId)
+          // worker
           val workOffers = IndexedSeq(buildWorkerOffer(executorId, executorData))
           scheduler.resourceOffers(workOffers, false)
         } else {
@@ -422,6 +443,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         }
       }
       if (taskDescs.nonEmpty) {
+        // 执行任务
         launchTasks(taskDescs)
       }
     }
@@ -429,6 +451,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     // Launch tasks returned by a set of resource offers
     private def launchTasks(tasks: Seq[Seq[TaskDescription]]): Unit = {
       for (task <- tasks.flatten) {
+        // 序列化
         val serializedTask = TaskDescription.encode(task)
         if (serializedTask.limit() >= maxRpcMessageSize) {
           Option(scheduler.taskIdToTaskSetManager.get(task.taskId)).foreach { taskSetMgr =>
@@ -454,6 +477,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           logDebug(s"Launching task ${task.taskId} on executor id: ${task.executorId} hostname: " +
             s"${executorData.executorHost}.")
 
+          // 发送 LaunchTask 任务
           executorData.executorEndpoint.send(LaunchTask(new SerializableBuffer(serializedTask)))
         }
       }
@@ -539,6 +563,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
   }
 
+  // 初始化driver端点
   val driverEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME, createDriverEndpoint())
 
   protected def minRegisteredRatio: Double = _minRegisteredRatio
@@ -622,6 +647,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
   override def start(): Unit = {
     if (UserGroupInformation.isSecurityEnabled()) {
+      // token 管理器
       delegationTokenManager = createTokenManager()
       delegationTokenManager.foreach { dtm =>
         val ugi = UserGroupInformation.getCurrentUser()
@@ -697,7 +723,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
   }
 
+  // 接收消息
   override def reviveOffers(): Unit = Utils.tryLogNonFatalError {
+    // 给 driver 发送消息 ReviveOffers
     driverEndpoint.send(ReviveOffers)
   }
 

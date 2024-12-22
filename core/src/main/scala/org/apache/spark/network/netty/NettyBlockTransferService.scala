@@ -103,6 +103,7 @@ private[spark] class NettyBlockTransferService(
     Utils.startServiceOnPort(_port, startService, conf, getClass.getName)._1
   }
 
+  // shuffle 监控
   override def shuffleMetrics(): MetricSet = {
     require(server != null && clientFactory != null, "NettyBlockTransferServer is not initialized")
 
@@ -116,6 +117,7 @@ private[spark] class NettyBlockTransferService(
     }
   }
 
+  // 抓取块数据
   override def fetchBlocks(
       host: String,
       port: Int,
@@ -167,6 +169,7 @@ private[spark] class NettyBlockTransferService(
 
   override def port: Int = server.getPort
 
+  // 上传块数据
   override def uploadBlock(
       hostname: String,
       port: Int,

@@ -110,7 +110,7 @@ private[spark] trait ResourceAllocator {
       val prevAmount = addressAvailabilityMap.getOrElse(address,
         throw new SparkException(s"Try to acquire an address that doesn't exist. $resourceName " +
           s"address $address doesn't exist."))
-
+      // 剩余的数量
       val left = prevAmount - amount
 
       if (left < 0) {
@@ -118,6 +118,7 @@ private[spark] trait ResourceAllocator {
           s"amount: ${ResourceAmountUtils.toFractionalResource(amount)}, but only " +
           s"${ResourceAmountUtils.toFractionalResource(prevAmount)} left.")
       } else {
+        // 更新 address 对应的数量
         addressAvailabilityMap(address) = left
       }
     }

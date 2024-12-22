@@ -46,14 +46,19 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
       mapId: Long,
       mapIndex: Int,
       context: TaskContext): MapStatus = {
+
     var writer: ShuffleWriter[Any, Any] = null
     try {
+      // shuffle管理器
       val manager = SparkEnv.get.shuffleManager
+      // 获取 shuffleWriter
       writer = manager.getWriter[Any, Any](
         dep.shuffleHandle,
         mapId,
         context,
         createMetricsReporter(context))
+
+      // 执行 shuffle 写操作
       writer.write(inputs.asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
       val mapStatus = writer.stop(success = true)
       if (mapStatus.isDefined) {

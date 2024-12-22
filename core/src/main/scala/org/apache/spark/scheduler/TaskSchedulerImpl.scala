@@ -179,6 +179,7 @@ private[spark] class TaskSchedulerImpl(
 
   val mapOutputTracker = SparkEnv.get.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster]
 
+  // 调度器
   private var schedulableBuilder: SchedulableBuilder = null
   // default scheduler is FIFO
   private val schedulingModeConf = conf.get(SCHEDULER_MODE)
@@ -191,6 +192,7 @@ private[spark] class TaskSchedulerImpl(
           schedulingModeConf)
     }
 
+  // 根池子
   val rootPool: Pool = new Pool("", schedulingMode, 0, 0)
 
   // This is a var so that we can reset it for testing purposes.
@@ -217,27 +219,34 @@ private[spark] class TaskSchedulerImpl(
 
   def initialize(backend: SchedulerBackend): Unit = {
     this.backend = backend
+    // 初始化
     schedulableBuilder = {
       schedulingMode match {
         case SchedulingMode.FIFO =>
+          // 先进先出调度构建器
           new FIFOSchedulableBuilder(rootPool)
         case SchedulingMode.FAIR =>
+          // 公平调度构建器
           new FairSchedulableBuilder(rootPool, sc)
         case _ =>
           throw new IllegalArgumentException(s"Unsupported $SCHEDULER_MODE_PROPERTY: " +
           s"$schedulingMode")
       }
     }
+    // 线程池
     schedulableBuilder.buildPools()
   }
 
   def newTaskId(): Long = nextTaskId.getAndIncrement()
 
   override def start(): Unit = {
+
+    // 启动调度器
     backend.start()
 
     if (!isLocal && conf.get(SPECULATION_ENABLED)) {
       logInfo("Starting speculative execution thread")
+      // 检查任务 100ms一次
       speculationScheduler.scheduleWithFixedDelay(
         () => Utils.tryOrStopSparkContext(sc) { checkSpeculatableTasks() },
         SPECULATION_INTERVAL_MS, SPECULATION_INTERVAL_MS, TimeUnit.MILLISECONDS)
@@ -248,12 +257,16 @@ private[spark] class TaskSchedulerImpl(
     waitBackendReady()
   }
 
+  // 提交任务
   override def submitTasks(taskSet: TaskSet): Unit = {
+    // 任务
     val tasks = taskSet.tasks
     logInfo(log"Adding task set " + taskSet.logId +
       log" with ${MDC(LogKeys.NUM_TASKS, tasks.length)} tasks resource profile " +
       log"${MDC(LogKeys.RESOURCE_PROFILE_ID, taskSet.resourceProfileId)}")
+    // 同步操作
     this.synchronized {
+      // 任务集合管理器
       val manager = createTaskSetManager(taskSet, maxTaskFailures)
       val stage = taskSet.stageId
       val stageTaskSets =
@@ -272,6 +285,7 @@ private[spark] class TaskSchedulerImpl(
         ts.isZombie = true
       }
       stageTaskSets(taskSet.stageAttemptId) = manager
+      // 调度器构建器,添加任务集合管理器
       schedulableBuilder.addTaskSetManager(manager, manager.taskSet.properties)
 
       if (!isLocal && !hasReceivedTask) {
@@ -289,6 +303,8 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
+
+    // 后端发送消息
     backend.reviveOffers()
   }
 
@@ -505,6 +521,7 @@ private[spark] class TaskSchedulerImpl(
       }
       if (!executorIdToRunningTaskIds.contains(o.executorId)) {
         hostToExecutors(o.host) += o.executorId
+        // executor 添加
         executorAdded(o.executorId, o.host)
         executorIdToHost(o.executorId) = o.host
         executorIdToRunningTaskIds(o.executorId) = HashSet[Long]()
@@ -528,6 +545,7 @@ private[spark] class TaskSchedulerImpl(
       }
     }.getOrElse(offers)
 
+    // 洗牌
     val shuffledOffers = shuffleOffers(filteredOffers)
     // Build a list of tasks to assign to each worker.
     // Note the size estimate here might be off with different ResourceProfiles but should be
@@ -989,6 +1007,7 @@ private[spark] class TaskSchedulerImpl(
       shouldRevive = rootPool.checkSpeculatableTasks(MIN_TIME_TO_SPECULATION)
     }
     if (shouldRevive) {
+      // 恢复消息
       backend.reviveOffers()
     }
   }

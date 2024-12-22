@@ -64,6 +64,7 @@ class DAGSchedulerEventProcessLoopTester(dagScheduler: DAGScheduler)
     if (isProcessing) {
       // `DAGSchedulerEventProcessLoop` is guaranteed to process events sequentially. So we should
       // buffer events for sequent processing later instead of processing them recursively.
+      // 添加到队列里
       eventQueue += event
     } else {
       try {

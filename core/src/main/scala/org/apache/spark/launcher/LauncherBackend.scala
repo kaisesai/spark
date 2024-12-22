@@ -39,16 +39,21 @@ private[spark] abstract class LauncherBackend {
   protected def conf: SparkConf
 
   def connect(): Unit = {
+    // 端口
     val port = conf.getOption(LauncherProtocol.CONF_LAUNCHER_PORT)
       .orElse(sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT))
       .map(_.toInt)
     val secret = conf.getOption(LauncherProtocol.CONF_LAUNCHER_SECRET)
       .orElse(sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET))
     if (port.isDefined && secret.isDefined) {
+      // socket 通信
       val s = new Socket(InetAddress.getLoopbackAddress(), port.get)
+      // 连接器
       connection = new BackendConnection(s)
+      // 发送消息
       connection.send(new Hello(secret.get, SPARK_VERSION))
       clientThread = LauncherBackend.threadFactory.newThread(connection)
+      // 启动线程
       clientThread.start()
       _isConnected = true
     }
@@ -102,6 +107,7 @@ private[spark] abstract class LauncherBackend {
   private class BackendConnection(s: Socket) extends LauncherConnection(s) {
 
     override protected def handle(m: Message): Unit = m match {
+      // 停止
       case _: Stop =>
         fireStopRequest()
 

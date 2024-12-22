@@ -793,10 +793,12 @@ private[spark] class SparkSubmit extends Logging {
     // All Spark parameters are expected to be passed to the client through system properties.
     // 独立集群模式
     if (args.isStandaloneCluster) {
+      // 使用 rest 风格
       if (args.useRest) {
         childMainClass = REST_CLUSTER_SUBMIT_CLASS
         childArgs += args.primaryResource += args.mainClass
       } else {
+        // 传统模式
         // In legacy standalone cluster mode, use Client as a wrapper around the user class
         // 通常的独立模式,ClientApp 类
         childMainClass = STANDALONE_CLUSTER_SUBMIT_CLASS
@@ -1111,6 +1113,7 @@ object SparkSubmit extends CommandLineUtils with Logging {
   private[deploy] val YARN_CLUSTER_SUBMIT_CLASS =
     "org.apache.spark.deploy.yarn.YarnClusterApplication"
   private[deploy] val REST_CLUSTER_SUBMIT_CLASS = classOf[RestSubmissionClientApp].getName()
+  // ClientApp
   private[deploy] val STANDALONE_CLUSTER_SUBMIT_CLASS = classOf[ClientApp].getName()
   private[deploy] val KUBERNETES_CLUSTER_SUBMIT_CLASS =
     "org.apache.spark.deploy.k8s.submit.KubernetesClientApplication"

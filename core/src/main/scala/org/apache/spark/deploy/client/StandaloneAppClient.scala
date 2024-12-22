@@ -86,6 +86,7 @@ private[spark] class StandaloneAppClient(
 
     override def onStart(): Unit = {
       try {
+        // 注册到master
         registerWithMaster(1)
       } catch {
         case e: Exception =>
@@ -99,7 +100,9 @@ private[spark] class StandaloneAppClient(
      *  Register with all masters asynchronously and returns an array `Future`s for cancellation.
      */
     private def tryRegisterAllMasters(): Array[JFuture[_]] = {
+      // 向所有master注册
       for (masterAddress <- masterRpcAddresses) yield {
+        // 提交任务
         registerMasterThreadPool.submit(new Runnable {
           override def run(): Unit = try {
             if (registered.get) {
@@ -107,7 +110,9 @@ private[spark] class StandaloneAppClient(
             }
             logInfo(
               log"Connecting to master ${MDC(LogKeys.MASTER_URL, masterAddress.toSparkURL)}...")
+            // 设置master端点
             val masterRef = rpcEnv.setupEndpointRef(masterAddress, Master.ENDPOINT_NAME)
+            // 给 master 发送 app描述信息
             masterRef.send(RegisterApplication(appDescription, self))
           } catch {
             case ie: InterruptedException => // Cancelled
@@ -126,6 +131,7 @@ private[spark] class StandaloneAppClient(
      * nthRetry means this is the nth attempt to register with master.
      */
     private def registerWithMaster(nthRetry: Int): Unit = {
+      // 注册所有的master
       registerMasterFutures.set(tryRegisterAllMasters())
       registrationRetryTimer.set(registrationRetryThread.schedule(new Runnable {
         override def run(): Unit = {
@@ -158,7 +164,9 @@ private[spark] class StandaloneAppClient(
       masterRpcAddresses.contains(remoteAddress)
     }
 
+    // AppClient 接收消息
     override def receive: PartialFunction[Any, Unit] = {
+      // 已经注册app
       case RegisteredApplication(appId_, masterRef) =>
         // FIXME How to handle the following cases?
         // 1. A master receives multiple registrations and sends back multiple
@@ -168,6 +176,7 @@ private[spark] class StandaloneAppClient(
         appId.set(appId_)
         registered.set(true)
         master = Some(masterRef)
+        // 监听器连接
         listener.connected(appId.get)
 
       case ApplicationRemoved(message) =>
@@ -288,6 +297,7 @@ private[spark] class StandaloneAppClient(
 
   def start(): Unit = {
     // Just launch an rpcEndpoint; it will call back into the listener.
+    // 设置回调
     endpoint.set(rpcEnv.setupEndpoint("AppClient", new ClientEndpoint(rpcEnv)))
   }
 

@@ -35,6 +35,7 @@ private[spark] class TorrentBroadcastFactory extends BroadcastFactory {
       isLocal: Boolean,
       id: Long,
       serializedOnly: Boolean = false): Broadcast[T] = {
+    // 创建飓风广播器
     new TorrentBroadcast[T](value_, id, serializedOnly)
   }
 

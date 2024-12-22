@@ -249,7 +249,7 @@ class SparkContext(config: SparkConf) extends Logging {
    | Accessors and public fields. These provide access to the internal state of the        |
    | context.                                                                              |
    * ------------------------------------------------------------------------------------- */
-
+  // 配置文件
   private[spark] def conf: SparkConf = _conf
 
   /**
@@ -283,11 +283,13 @@ class SparkContext(config: SparkConf) extends Logging {
   // An asynchronous listener bus for Spark events
   private[spark] def listenerBus: LiveListenerBus = _listenerBus
 
+  // spark基础环境设施
   // This function allows components created by SparkEnv to be mocked in unit tests:
   private[spark] def createSparkEnv(
       conf: SparkConf,
       isLocal: Boolean,
       listenerBus: LiveListenerBus): SparkEnv = {
+    // 创建spark环境, netty 服务
     SparkEnv.createDriverEnv(conf, isLocal, listenerBus, SparkContext.numDriverCores(master, conf))
   }
 
@@ -313,6 +315,7 @@ class SparkContext(config: SparkConf) extends Logging {
   }
   def statusTracker: SparkStatusTracker = _statusTracker
 
+  // 进度条
   private[spark] def progressBar: Option[ConsoleProgressBar] = _progressBar
 
   private[spark] def ui: Option[SparkUI] = _ui
@@ -335,18 +338,24 @@ class SparkContext(config: SparkConf) extends Logging {
   // Set SPARK_USER for user who is running SparkContext.
   val sparkUser = Utils.getCurrentUserName()
 
+  // 调度器后端
   private[spark] def schedulerBackend: SchedulerBackend = _schedulerBackend
 
+  // 任务调度器
   private[spark] def taskScheduler: TaskScheduler = _taskScheduler
+
+  // 任务调度器
   private[spark] def taskScheduler_=(ts: TaskScheduler): Unit = {
     _taskScheduler = ts
   }
 
+  // 有向无环图调度器
   private[spark] def dagScheduler: DAGScheduler = _dagScheduler
   private[spark] def dagScheduler_=(ds: DAGScheduler): Unit = {
     _dagScheduler = ds
   }
 
+  // shuffle驱动组件
   private[spark] def shuffleDriverComponents: ShuffleDriverComponents = _shuffleDriverComponents
 
   /**
@@ -362,9 +371,11 @@ class SparkContext(config: SparkConf) extends Logging {
 
   private[spark] def eventLogger: Option[EventLoggingListener] = _eventLogger
 
+  // 执行器分配管理器
   private[spark] def executorAllocationManager: Option[ExecutorAllocationManager] =
     _executorAllocationManager
 
+  // 资源属性管理器
   private[spark] def resourceProfileManager: ResourceProfileManager = _resourceProfileManager
 
   private[spark] def cleaner: Option[ContextCleaner] = _cleaner
@@ -403,6 +414,7 @@ class SparkContext(config: SparkConf) extends Logging {
     }
   }
 
+  // 实例启动
   try {
     _conf = config.clone()
     _conf.get(SPARK_LOG_LEVEL).foreach { level =>
@@ -478,6 +490,7 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     }
 
+    // 监听器总线
     _listenerBus = new LiveListenerBus(_conf)
     _resourceProfileManager = new ResourceProfileManager(_conf, _listenerBus)
 
@@ -487,6 +500,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _statusStore = AppStatusStore.createLiveStore(conf, appStatusSource)
     listenerBus.addToStatusQueue(_statusStore.listener.get)
 
+    // spark环境设施
     // Create the Spark execution environment (cache, map output tracker, etc)
     _env = createSparkEnv(_conf, isLocal, listenerBus)
     SparkEnv.set(_env)
@@ -497,6 +511,7 @@ class SparkContext(config: SparkConf) extends Logging {
       _conf.set("spark.repl.class.uri", replUri)
     }
 
+    // 状态记录器
     _statusTracker = new SparkStatusTracker(this, _statusStore)
 
     _progressBar =
@@ -518,6 +533,7 @@ class SparkContext(config: SparkConf) extends Logging {
     // the bound port to the cluster manager properly
     _ui.foreach(_.bind())
 
+    // Hadoop配置
     _hadoopConfiguration = SparkHadoopUtil.get.newConfiguration(_conf)
     // Performance optimization: this dummy call to .size() triggers eager evaluation of
     // Configuration's internal  `properties` field, guaranteeing that it will be computed and
@@ -531,6 +547,7 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // Add each JAR given through the constructor
     if (jars != null) {
+      // 添加jar
       jars.foreach(jar => addJar(jar, true))
       if (allAddedJars.nonEmpty) {
         _conf.set("spark.app.initial.jar.urls", allAddedJars.keys.toSeq.mkString(","))
@@ -551,6 +568,7 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     }
 
+    // 执行器内存
     _executorMemory = SparkContext.executorMemoryInMb(_conf)
 
     // Convert java options to env vars as a work around
@@ -585,10 +603,12 @@ class SparkContext(config: SparkConf) extends Logging {
     _env.initializeShuffleManager()
     _env.initializeMemoryManager(SparkContext.numDriverCores(master, conf))
 
+    // 创建并启动调度器
     // Create and start the scheduler
     val (sched, ts) = SparkContext.createTaskScheduler(this, master)
     _schedulerBackend = sched
     _taskScheduler = ts
+    // 有向无环图调度器
     _dagScheduler = new DAGScheduler(this)
     _heartbeatReceiver.ask[Boolean](TaskSchedulerIsSet)
 
@@ -615,6 +635,7 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
+    // 启动任务调度器
     _taskScheduler.start()
 
     _applicationId = _taskScheduler.applicationId()
@@ -625,6 +646,7 @@ class SparkContext(config: SparkConf) extends Logging {
       _env.blockManager.blockStoreClient.setAppAttemptId(attemptId)
     }
 
+    // shuffle组件
     // initialize after application id and attempt id has been initialized
     _shuffleDriverComponents = ShuffleDataIOUtils.loadShuffleDataIO(_conf).driver()
     _shuffleDriverComponents.initializeApplication().asScala.foreach { case (k, v) =>
@@ -663,11 +685,13 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     _cleaner.foreach(_.start())
 
+    // 动态分配
     val dynamicAllocationEnabled = Utils.isDynamicAllocationEnabled(_conf)
     _executorAllocationManager =
       if (dynamicAllocationEnabled) {
         schedulerBackend match {
           case b: ExecutorAllocationClient =>
+            // executor动态分配客户端
             Some(new ExecutorAllocationManager(
               schedulerBackend.asInstanceOf[ExecutorAllocationClient], listenerBus, _conf,
               cleaner = cleaner, resourceProfileManager = resourceProfileManager,
@@ -678,10 +702,16 @@ class SparkContext(config: SparkConf) extends Logging {
       } else {
         None
       }
+    // 启动动态分配器
     _executorAllocationManager.foreach(_.start())
 
+    // 启动并启动监听器bus
     setupAndStartListenerBus()
+
+    // 发送环境更新
     postEnvironmentUpdate()
+
+    // 发送程序启动消息
     postApplicationStart()
 
     // After application started, attach handlers to started server and start handler.
@@ -1721,10 +1751,12 @@ class SparkContext(config: SparkConf) extends Logging {
     assertNotStopped()
     require(!classOf[RDD[_]].isAssignableFrom(classTag[T].runtimeClass),
       "Can not directly broadcast RDDs; instead, call collect() and broadcast the result.")
+    // 广播
     val bc = env.broadcastManager.newBroadcast[T](value, isLocal, serializedOnly)
     val callSite = getCallSite()
     logInfo(log"Created broadcast ${MDC(LogKeys.BROADCAST_ID, bc.id)}" +
       log" from ${MDC(LogKeys.CALL_SITE_SHORT_FORM, callSite.shortForm)}")
+    // 通道注册广播器
     cleaner.foreach(_.registerBroadcastForCleanup(bc))
     bc
   }
@@ -2476,6 +2508,7 @@ class SparkContext(config: SparkConf) extends Logging {
       logInfo(log"RDD's recursive dependencies:\n" +
         log"${MDC(LogKeys.RDD_DEBUG_STRING, rdd.toDebugString)}")
     }
+    // 有向无环图
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, resultHandler, localProperties.get)
     progressBar.foreach(_.finishAll())
     rdd.doCheckpoint()
@@ -3264,6 +3297,7 @@ object SparkContext extends Logging {
       master: String): (SchedulerBackend, TaskScheduler) = {
     import SparkMasterRegex._
 
+    // 创建任务调度
     // When running locally, don't try to re-execute tasks on failure.
     val MAX_LOCAL_TASK_FAILURES = 1
 
@@ -3312,8 +3346,11 @@ object SparkContext extends Logging {
         (backend, scheduler)
 
       case SPARK_REGEX(sparkUrl) =>
+        // spark集群
+        // 任务调度器
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
+        // 后端器
         val backend = new StandaloneSchedulerBackend(scheduler, sc, masterUrls)
         scheduler.initialize(backend)
         (backend, scheduler)

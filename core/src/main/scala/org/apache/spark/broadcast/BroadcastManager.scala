@@ -75,6 +75,7 @@ private[spark] class BroadcastManager(
 
       case _ => // do nothing
     }
+    // 创建广播器
     broadcastFactory.newBroadcast[T](value_, isLocal, bid, serializedOnly)
   }
 

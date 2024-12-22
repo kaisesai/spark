@@ -243,10 +243,12 @@ private[spark] class ExecutorAllocationManager(
    * the scheduling task.
    */
   def start(): Unit = {
+    // 动态分配
     listenerBus.addToManagementQueue(listener)
     listenerBus.addToManagementQueue(executorMonitor)
     cleaner.foreach(_.attachListener(executorMonitor))
 
+    // 调度任务
     val scheduleTask = new Runnable() {
       override def run(): Unit = Utils.tryLog(schedule())
     }
@@ -345,11 +347,13 @@ private[spark] class ExecutorAllocationManager(
    * This is factored out into its own method for testing.
    */
   private def schedule(): Unit = synchronized {
+    // 执行调度
     val executorIdsToBeRemoved = executorMonitor.timedOutExecutors()
     if (executorIdsToBeRemoved.nonEmpty) {
       initializing = false
     }
 
+    // 更新同步executor目标数量
     // Update executor target number only after initializing flag is unset
     updateAndSyncNumExecutorsTarget(clock.nanoTime())
     if (executorIdsToBeRemoved.nonEmpty) {
@@ -392,9 +396,11 @@ private[spark] class ExecutorAllocationManager(
           // to immediately  get a new executor, since we wouldn't even use it yet.
           decrementExecutorsFromTarget(maxNeeded, rpId, updatesNeeded)
         } else if (addTime != NOT_SET && now >= addTime) {
+          // 添加执行器到目标
           addExecutorsToTarget(maxNeeded, rpId, updatesNeeded)
         }
       }
+      // 更新请求
       doUpdateRequest(updatesNeeded.toMap, now)
     }
   }
@@ -403,6 +409,7 @@ private[spark] class ExecutorAllocationManager(
       maxNeeded: Int,
       rpId: Int,
       updatesNeeded: mutable.HashMap[Int, ExecutorAllocationManager.TargetNumUpdates]): Int = {
+    // 更新目标
     updateTargetExecs(addExecutors, maxNeeded, rpId, updatesNeeded)
   }
 

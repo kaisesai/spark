@@ -25,8 +25,11 @@ import scala.jdk.CollectionConverters._
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 
+
 /**
  * A Schedulable entity that represents collection of Pools or TaskSetManagers
+ *
+ * 调度池
  */
 private[spark] class Pool(
     val poolName: String,
@@ -35,6 +38,7 @@ private[spark] class Pool(
     initWeight: Int)
   extends Schedulable with Logging {
 
+  // 调度队列:并发链接队列
   val schedulableQueue = new ConcurrentLinkedQueue[Schedulable]
   val schedulableNameToSchedulable = new ConcurrentHashMap[String, Schedulable]
   val weight = initWeight
@@ -63,7 +67,9 @@ private[spark] class Pool(
 
   override def addSchedulable(schedulable: Schedulable): Unit = {
     require(schedulable != null)
+    // 调度队列
     schedulableQueue.add(schedulable)
+    // 调度名称
     schedulableNameToSchedulable.put(schedulable.name, schedulable)
     schedulable.parent = this
   }

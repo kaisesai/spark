@@ -605,6 +605,7 @@ private[deploy] class Worker(
         log"Master with url ${MDC(MASTER_URL, masterUrl)} requested this worker to reconnect.")
       registerWithMaster()
 
+    // worker 接收消息,开始执行 executor 任务
     case LaunchExecutor(masterUrl, appId, execId, rpId, appDesc, cores_, memory_, resources_) =>
       if (masterUrl != activeMasterUrl) {
         logWarning(log"Invalid Master (${MDC(MASTER_URL, masterUrl)}) " +
@@ -645,6 +646,7 @@ private[deploy] class Worker(
             dirs
           })
           appDirectories(appId) = appLocalDirs
+          // executor 运行器
           val manager = new ExecutorRunner(
             appId,
             execId,
@@ -666,9 +668,13 @@ private[deploy] class Worker(
             rpId,
             resources_)
           executors(appId + "/" + execId) = manager
+          // 启动
           manager.start()
+          // 添加核心数
           coresUsed += cores_
+          // 添加内存数
           memoryUsed += memory_
+          // 添加资源
           addResourcesUsed(resources_)
         } catch {
           case e: Exception =>

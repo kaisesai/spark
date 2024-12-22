@@ -76,9 +76,11 @@ private[spark] class StandaloneSchedulerBackend(
     // mode. In cluster mode, the code that submits the application to the Master needs to connect
     // to the launcher instead.
     if (sc.deployMode == "client") {
+      // client 模式连接数据
       launcherBackend.connect()
     }
 
+    // 驱动 URL
     // The endpoint for executors to talk to us
     val driverUrl = RpcEndpointAddress(
       sc.conf.get(config.DRIVER_HOST_ADDRESS),
@@ -112,6 +114,7 @@ private[spark] class StandaloneSchedulerBackend(
     // Start executors with a few necessary configs for registering with the scheduler
     val sparkJavaOpts = Utils.sparkJavaOpts(conf, SparkConf.isExecutorStartupConf)
     val javaOpts = sparkJavaOpts ++ extraJavaOpts
+    // 命令执行器 CoarseGrainedExecutorBackend
     val command = Command("org.apache.spark.executor.CoarseGrainedExecutorBackend",
       args, sc.executorEnvs, classPathEntries ++ testingClassPath, libraryPathEntries, javaOpts)
     val webUrl = sc.ui.map(_.webUrl).getOrElse("")
@@ -130,9 +133,12 @@ private[spark] class StandaloneSchedulerBackend(
       } else {
         None
       }
+    // app 描述信息
     val appDesc = ApplicationDescription(sc.appName, maxCores, command,
       webUrl, defaultProfile = defaultProf, sc.eventLogDir, sc.eventLogCodec, initialExecutorLimit)
+    // 创建客户端 StandaloneAppClient
     client = new StandaloneAppClient(sc.env.rpcEnv, masters, appDesc, this, conf)
+    // 启动客户端
     client.start()
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)
     waitForRegistration()
@@ -143,9 +149,11 @@ private[spark] class StandaloneSchedulerBackend(
     stop(SparkAppHandle.State.FINISHED)
   }
 
+  // 已连接
   override def connected(appId: String): Unit = {
     logInfo(log"Connected to Spark cluster with app ID ${MDC(LogKeys.APP_ID, appId)}")
     this.appId = appId
+    // 通知上下文
     notifyContext()
     launcherBackend.setAppId(appId)
   }
@@ -273,6 +281,7 @@ private[spark] class StandaloneSchedulerBackend(
   }
 
   private def notifyContext() = {
+    // 释放已注册的栅栏
     registrationBarrier.release()
   }
 
@@ -296,6 +305,7 @@ private[spark] class StandaloneSchedulerBackend(
   }
 
   override def createDriverEndpoint(): DriverEndpoint = {
+    // 创建端点
     new StandaloneDriverEndpoint()
   }
 

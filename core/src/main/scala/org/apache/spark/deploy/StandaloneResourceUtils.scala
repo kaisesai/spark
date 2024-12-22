@@ -101,6 +101,7 @@ private[spark] object StandaloneResourceUtils extends Logging {
       ResourceAllocation(new ResourceID(componentName, rName), rInfo.addresses.toImmutableArraySeq)
     }.toSeq
     try {
+      // 写入资源
       writeResourceAllocationJson(allocations, tmpFile)
     } catch {
       case NonFatal(e) =>

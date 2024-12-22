@@ -149,6 +149,7 @@ private[spark] class LiveListenerBus(conf: SparkConf) {
 
     // If the bus was already started when the check above was made, just post directly to the
     // queues.
+    // 发送事件到队列
     postToQueues(event)
   }
 

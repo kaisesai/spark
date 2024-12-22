@@ -167,6 +167,7 @@ class JavaSerializer(conf: SparkConf) extends Serializer with Externalizable {
 
   override def newInstance(): SerializerInstance = {
     val classLoader = defaultClassLoader.getOrElse(Thread.currentThread.getContextClassLoader)
+    // 创建实例
     new JavaSerializerInstance(counterReset, extraDebugInfo, classLoader)
   }
 
