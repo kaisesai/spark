@@ -196,6 +196,7 @@ private[spark] class BlockManager(
   // We initialize the ShuffleManager later in SparkContext and Executor, to allow
   // user jars to define custom ShuffleManagers, as such `_shuffleManager` will be null here
   // (except for tests) and we ask for the instance from the SparkEnv.
+  // 懒加载 shuffle 管理器
   private lazy val shuffleManager = Option(_shuffleManager).getOrElse(SparkEnv.get.shuffleManager)
 
   // Similarly, we also initialize MemoryManager later after DriverPlugin is loaded, to
@@ -1480,6 +1481,7 @@ private[spark] class BlockManager(
       bufferSize: Int,
       writeMetrics: ShuffleWriteMetricsReporter): DiskBlockObjectWriter = {
     val syncWrites = conf.get(config.SHUFFLE_SYNC)
+    // 磁盘块对象写入器
     new DiskBlockObjectWriter(file, serializerManager, serializerInstance, bufferSize,
       syncWrites, writeMetrics, blockId)
   }

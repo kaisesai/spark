@@ -167,11 +167,13 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
     }
     logger.debug("Push {} shuffle blocks to {}:{}", blockIds.length, host, port);
     try {
+      // 块推送器
       RetryingBlockTransferor.BlockTransferStarter blockPushStarter =
           (inputBlockId, inputListener) -> {
             if (clientFactory != null) {
               assert inputListener instanceof BlockPushingListener :
                 "Expecting a BlockPushingListener, but got " + inputListener.getClass();
+              // 客户端
               TransportClient client = clientFactory.createClient(host, port);
               new OneForOneBlockPusher(client, appId, comparableAppAttemptId, inputBlockId,
                 (BlockPushingListener) inputListener, buffersWithId).start();
@@ -184,6 +186,7 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
         new RetryingBlockTransferor(
           transportConf, blockPushStarter, blockIds, listener, PUSH_ERROR_HANDLER).start();
       } else {
+        // 创建并启动推送块数据
         blockPushStarter.createAndStart(blockIds, listener);
       }
     } catch (Exception e) {

@@ -403,6 +403,7 @@ private[spark] class KryoSerializerInstance(
    */
   private[serializer] def borrowKryo(): Kryo = {
     if (usePool) {
+      // 从池中借用一个 kryo 实例
       val kryo = ks.pool.borrow()
       kryo.reset()
       kryo

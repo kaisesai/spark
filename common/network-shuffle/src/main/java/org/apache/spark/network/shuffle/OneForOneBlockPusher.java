@@ -56,6 +56,7 @@ public class OneForOneBlockPusher {
   private final BlockPushingListener listener;
   private final Map<String, ManagedBuffer> buffers;
 
+  // 一对一推送器
   public OneForOneBlockPusher(
       TransportClient client,
       String appId,
@@ -153,6 +154,8 @@ public class OneForOneBlockPusher {
    */
   public void start() {
     logger.debug("Start pushing {} blocks", blockIds.length);
+
+    // 循环块数据,进行推送
     for (int i = 0; i < blockIds.length; i++) {
       assert buffers.containsKey(blockIds[i]) : "Could not find the block buffer for block "
         + blockIds[i];
@@ -161,10 +164,12 @@ public class OneForOneBlockPusher {
         throw new IllegalArgumentException(
           "Unexpected shuffle push block id format: " + blockIds[i]);
       }
+      // 块头细腻系
       ByteBuffer header =
         new PushBlockStream(appId, appAttemptId, Integer.parseInt(blockIdParts[1]),
           Integer.parseInt(blockIdParts[2]), Integer.parseInt(blockIdParts[3]),
             Integer.parseInt(blockIdParts[4]), i).toByteBuffer();
+      // 上传快数据
       client.uploadStream(new NioManagedBuffer(header), buffers.get(blockIds[i]),
         new BlockPushCallback(i, blockIds[i]));
     }

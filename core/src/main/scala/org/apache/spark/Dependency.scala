@@ -87,6 +87,7 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
   extends Dependency[Product2[K, V]] with Logging {
 
   if (mapSideCombine) {
+    // mapSideCombine 参数为 true 时, aggregator.isDefined 也必须为 true
     require(aggregator.isDefined, "Map-side combine without Aggregator specified!")
   }
   override def rdd: RDD[Product2[K, V]] = _rdd.asInstanceOf[RDD[Product2[K, V]]]
@@ -100,6 +101,7 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
 
   val shuffleId: Int = _rdd.context.newShuffleId()
 
+  // shuffle 处理器, 其实就是没有任何方法的类,用于标识 使用哪种 shuffle write
   val shuffleHandle: ShuffleHandle = _rdd.context.env.shuffleManager.registerShuffle(
     shuffleId, this)
 

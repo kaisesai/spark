@@ -75,6 +75,7 @@ class SparkEnv (
   // user jars to define custom ShuffleManagers.
   @volatile private var _shuffleManager: ShuffleManager = _
 
+  // 后续的 shuffle manager
   def shuffleManager: ShuffleManager = _shuffleManager
 
   // We initialize the MemoryManager later in SparkContext after DriverPlugin is loaded
@@ -219,16 +220,20 @@ class SparkEnv (
     releasePythonWorker(
       pythonExec, workerModule, PythonWorkerFactory.defaultDaemonModule, envVars, worker)
   }
-
+  /**
+   * 初始化 shuffle manager
+   */
   private[spark] def initializeShuffleManager(): Unit = {
     Preconditions.checkState(null == _shuffleManager,
       "Shuffle manager already initialized to %s", _shuffleManager)
+    // shuffle 管理器
     _shuffleManager = ShuffleManager.create(conf, executorId == SparkContext.DRIVER_IDENTIFIER)
   }
 
   private[spark] def initializeMemoryManager(numUsableCores: Int): Unit = {
     Preconditions.checkState(null == memoryManager,
       "Memory manager already initialized to %s", _memoryManager)
+    // 统一内存管理器
     _memoryManager = UnifiedMemoryManager(conf, numUsableCores)
   }
 }
@@ -250,6 +255,7 @@ object SparkEnv extends Logging {
     env
   }
 
+  // 创建 driver 环境下 spark env
   /**
    * Create a SparkEnv for the driver.
    */
@@ -319,6 +325,8 @@ object SparkEnv extends Logging {
 
   /**
    * Helper method to create a SparkEnv for a driver or an executor.
+   *
+   * 实际的创建 spark env 的核心方法
    */
   private def create(
       conf: SparkConf,
@@ -367,6 +375,7 @@ object SparkEnv extends Logging {
     val serializer = Utils.instantiateSerializerFromConf[Serializer](SERIALIZER, conf, isDriver)
     logDebug(s"Using serializer: ${serializer.getClass}")
 
+    // 序列化器管理器
     val serializerManager = new SerializerManager(serializer, conf, ioEncryptionKey)
 
     // 闭包序列化
@@ -388,6 +397,7 @@ object SparkEnv extends Logging {
     // 广播管理器
     val broadcastManager = new BroadcastManager(isDriver, conf)
 
+    // map 输出记录器
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
@@ -415,7 +425,7 @@ object SparkEnv extends Logging {
         numUsableCores,
         sslOptions = Some(securityManager.getRpcSSLOptions())
       )
-      // 扩展的阻塞存储客户端
+      // 扩展的块存储客户端
       Some(new ExternalBlockStoreClient(transConf, securityManager,
         securityManager.isAuthenticationEnabled(), conf.get(config.SHUFFLE_REGISTRATION_TIMEOUT)))
     } else {
@@ -424,6 +434,8 @@ object SparkEnv extends Logging {
 
     // Mapping from block manager id to the block manager's information.
     val blockManagerInfo = new concurrent.TrieMap[BlockManagerId, BlockManagerInfo]()
+
+    // 块管理器 master (driver端会创建, 其他端引用它的ref)
     val blockManagerMaster = new BlockManagerMaster(
       // 注册端点: 阻塞管理器master端点
       registerOrLookupEndpoint(
@@ -449,7 +461,7 @@ object SparkEnv extends Logging {
       conf,
       isDriver)
 
-    // 阻塞传输服务
+    // 块传输服务
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, serializerManager, bindAddress,
         advertiseAddress, blockManagerPort, numUsableCores, blockManagerMaster.driverEndpoint)
@@ -459,7 +471,7 @@ object SparkEnv extends Logging {
     //     in the SparkContext and Executor, to allow for custom ShuffleManagers defined
     //     in user jars. The BlockManager uses a lazy val to obtain the
     //     shuffleManager from the SparkEnv.
-    // 阻塞管理器
+    // 块管理器
     val blockManager = new BlockManager(
       executorId,
       rpcEnv,
@@ -468,7 +480,7 @@ object SparkEnv extends Logging {
       conf,
       _memoryManager = null,
       mapOutputTracker,
-      _shuffleManager = null,
+      _shuffleManager = null, // shuffle 管理器
       blockTransferService,
       securityManager,
       externalShuffleClient)
@@ -520,6 +532,7 @@ object SparkEnv extends Logging {
       envInstance.driverTmpDir = Some(sparkFilesDir)
     }
 
+    // 返回 spark env 实例
     envInstance
   }
 

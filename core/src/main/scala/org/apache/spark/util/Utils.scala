@@ -2566,6 +2566,7 @@ private[spark] object Utils
   def instantiateSerializerOrShuffleManager[T](className: String,
       conf: SparkConf,
       isDriver: Boolean): T = {
+    // 反射的方式获取 shuffle manager
     val cls = Utils.classForName(className)
     // Look for a constructor taking a SparkConf and a boolean isDriver, then one taking just
     // SparkConf, then one taking no arguments

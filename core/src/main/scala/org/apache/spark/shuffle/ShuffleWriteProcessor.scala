@@ -60,7 +60,11 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
 
       // 执行 shuffle 写操作
       writer.write(inputs.asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+
+      // 停止
       val mapStatus = writer.stop(success = true)
+
+      // 定义了状态
       if (mapStatus.isDefined) {
         // Check if sufficient shuffle mergers are available now for the ShuffleMapTask to push
         if (dep.shuffleMergeAllowed && dep.getMergerLocs.isEmpty) {
@@ -68,6 +72,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
           val mergerLocs =
             mapOutputTracker.getShufflePushMergerLocations(dep.shuffleId)
           if (mergerLocs.nonEmpty) {
+            // 允许合并
             dep.setMergerLocs(mergerLocs)
           }
         }
@@ -76,14 +81,17 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
         // block push requests. It delegates pushing the blocks to a different thread-pool -
         // ShuffleBlockPusher.BLOCK_PUSHER_POOL.
         if (!dep.shuffleMergeFinalized) {
+          // 块解析器处理
           manager.shuffleBlockResolver match {
             case resolver: IndexShuffleBlockResolver =>
               logInfo(log"Shuffle merge enabled with" +
                 log" ${MDC(NUM_MERGER_LOCATIONS, dep.getMergerLocs.size)} merger locations" +
                 log" for stage ${MDC(STAGE_ID, context.stageId())}" +
                 log" with shuffle ID ${MDC(SHUFFLE_ID, dep.shuffleId)}")
+              // 推送块数据到 块服务器
               logDebug(s"Starting pushing blocks for the task ${context.taskAttemptId()}")
               val dataFile = resolver.getDataFile(dep.shuffleId, mapId)
+              // 推送器,初始化并开始推送块数据
               new ShuffleBlockPusher(SparkEnv.get.conf)
                 .initiateBlockPush(dataFile, writer.getPartitionLengths(), dep, mapIndex)
             case _ =>

@@ -500,7 +500,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _statusStore = AppStatusStore.createLiveStore(conf, appStatusSource)
     listenerBus.addToStatusQueue(_statusStore.listener.get)
 
-    // spark环境设施
+    // spark环境设施(非常重要!!!)
     // Create the Spark execution environment (cache, map output tracker, etc)
     _env = createSparkEnv(_conf, isLocal, listenerBus)
     SparkEnv.set(_env)
@@ -600,7 +600,10 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // Initialize any plugins before the task scheduler is initialized.
     _plugins = PluginContainer(this, _resources.asJava)
+
+    // 初始化 shuffle 管理器: _shuffleManager
     _env.initializeShuffleManager()
+    // 初始化内存管理器
     _env.initializeMemoryManager(SparkContext.numDriverCores(master, conf))
 
     // 创建并启动调度器
@@ -658,6 +661,8 @@ class SparkContext(config: SparkConf) extends Logging {
       System.setProperty("spark.ui.proxyBase", proxyUrl + "/proxy/" + _applicationId)
     }
     _ui.foreach(_.setAppId(_applicationId))
+
+    // 块管理器-初始化
     _env.blockManager.initialize(_applicationId)
     FallbackStorage.registerBlockManagerIfNeeded(_env.blockManager.master, _conf)
 

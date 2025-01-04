@@ -65,6 +65,11 @@ import org.apache.spark.storage.TimeTrackingOutputStream;
 import org.apache.spark.unsafe.Platform;
 import org.apache.spark.util.Utils;
 
+/**
+ * 不安全的 shuffle
+ * @param <K>
+ * @param <V>
+ */
 @Private
 public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
@@ -101,6 +106,8 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   }
 
   private MyByteArrayOutputStream serBuffer;
+
+  // 序列化流
   private SerializationStream serOutputStream;
 
   /**
@@ -142,6 +149,8 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       (int) (long) sparkConf.get(package$.MODULE$.SHUFFLE_SORT_INIT_BUFFER_SIZE());
     this.mergeBufferSizeInBytes =
       (int) (long) sparkConf.get(package$.MODULE$.SHUFFLE_FILE_MERGE_BUFFER_SIZE()) * 1024;
+
+    // 打开流
     open();
   }
 
@@ -179,6 +188,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     boolean success = false;
     try {
       while (records.hasNext()) {
+        // 插入记录并排序
         insertRecordIntoSorter(records.next());
       }
       closeAndWriteOutput();
@@ -186,6 +196,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     } finally {
       if (sorter != null) {
         try {
+          // 清理资源
           sorter.cleanupResources();
         } catch (Exception e) {
           // Only throw this error if we won't be masking another
@@ -203,6 +214,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   private void open() throws SparkException {
     assert (sorter == null);
+    // shuffle 排序器
     sorter = new ShuffleExternalSorter(
       memoryManager,
       blockManager,
@@ -211,7 +223,9 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       partitioner.numPartitions(),
       sparkConf,
       writeMetrics);
+    // 缓存区
     serBuffer = new MyByteArrayOutputStream(DEFAULT_INITIAL_SER_BUFFER_SIZE);
+    // 序列化输出流
     serOutputStream = serializer.serializeStream(serBuffer);
   }
 
@@ -221,8 +235,10 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     updatePeakMemoryUsed();
     serBuffer = null;
     serOutputStream = null;
+    // 关闭并且获取溢写信息
     final SpillInfo[] spills = sorter.closeAndGetSpills();
     try {
+      // 合并溢写数据
       partitionLengths = mergeSpills(spills);
     } finally {
       sorter = null;
@@ -242,6 +258,8 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     assert(sorter != null);
     final K key = record._1();
     final int partitionId = partitioner.getPartition(key);
+
+    // 将 record 数据写入序列化流中
     serBuffer.reset();
     serOutputStream.writeKey(key, OBJECT_CLASS_TAG);
     serOutputStream.writeValue(record._2(), OBJECT_CLASS_TAG);
@@ -250,6 +268,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     final int serializedRecordSize = serBuffer.size();
     assert (serializedRecordSize > 0);
 
+    // 将序列化流中的数据写入到排序器
     sorter.insertRecord(
       serBuffer.getBuf(), Platform.BYTE_ARRAY_OFFSET, serializedRecordSize, partitionId);
   }
@@ -269,8 +288,10 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   private long[] mergeSpills(SpillInfo[] spills) throws IOException {
     long[] partitionLengths;
     if (spills.length == 0) {
+      // shuffle 映射输出写入器
       final ShuffleMapOutputWriter mapWriter = shuffleExecutorComponents
           .createMapOutputWriter(shuffleId, mapId, partitioner.numPartitions());
+      // 提交全部分区
       return mapWriter.commitAllPartitions(
         ShuffleChecksumHelper.EMPTY_CHECKSUM_VALUE).getPartitionLengths();
     } else if (spills.length == 1) {
@@ -285,6 +306,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         maybeSingleFileWriter.get()
           .transferMapSpillFile(spills[0].file, partitionLengths, sorter.getChecksums());
       } else {
+        // 合并溢写平台写入器
         partitionLengths = mergeSpillsUsingStandardWriter(spills);
       }
     } else {
@@ -296,12 +318,15 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   private long[] mergeSpillsUsingStandardWriter(SpillInfo[] spills) throws IOException {
     long[] partitionLengths;
     final boolean compressionEnabled = (boolean) sparkConf.get(package$.MODULE$.SHUFFLE_COMPRESS());
+
+    // 压缩编码器
     final CompressionCodec compressionCodec = CompressionCodec$.MODULE$.createCodec(sparkConf);
     final boolean fastMergeEnabled =
         (boolean) sparkConf.get(package$.MODULE$.SHUFFLE_UNSAFE_FAST_MERGE_ENABLE());
     final boolean fastMergeIsSupported = !compressionEnabled ||
         CompressionCodec$.MODULE$.supportsConcatenationOfSerializedStreams(compressionCodec);
     final boolean encryptionEnabled = blockManager.serializerManager().encryptionEnabled();
+    // shuffle映射输出写入器
     final ShuffleMapOutputWriter mapWriter = shuffleExecutorComponents
         .createMapOutputWriter(shuffleId, mapId, partitioner.numPartitions());
     try {
@@ -330,6 +355,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         logger.debug("Using slow merge");
         mergeSpillsWithFileStream(spills, mapWriter, compressionCodec);
       }
+      // 提交所有分区
       partitionLengths = mapWriter.commitAllPartitions(sorter.getChecksums()).getPartitionLengths();
     } catch (Exception e) {
       try {

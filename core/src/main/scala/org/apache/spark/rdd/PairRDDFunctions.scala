@@ -85,16 +85,19 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
         throw SparkCoreErrors.hashPartitionerCannotPartitionArrayKeyError()
       }
     }
+    // 聚合器
     val aggregator = new Aggregator[K, V, C](
       self.context.clean(createCombiner),
       self.context.clean(mergeValue),
       self.context.clean(mergeCombiners))
     if (self.partitioner == Some(partitioner)) {
+      // mapRDD
       self.mapPartitions(iter => {
         val context = TaskContext.get()
         new InterruptibleIterator(context, aggregator.combineValuesByKey(iter, context))
       }, preservesPartitioning = true)
     } else {
+      // shuffle RDD, 传入 self RDD, 分区器
       new ShuffledRDD[K, V, C](self, partitioner)
         .setSerializer(serializer)
         .setAggregator(aggregator)
@@ -501,6 +504,8 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     val createCombiner = (v: V) => CompactBuffer(v)
     val mergeValue = (buf: CompactBuffer[V], v: V) => buf += v
     val mergeCombiners = (c1: CompactBuffer[V], c2: CompactBuffer[V]) => c1 ++= c2
+
+    // mapSideCombine 为 false
     val bufs = combineByKeyWithClassTag[CompactBuffer[V]](
       createCombiner, mergeValue, mergeCombiners, partitioner, mapSideCombine = false)
     bufs.asInstanceOf[RDD[(K, Iterable[V])]]

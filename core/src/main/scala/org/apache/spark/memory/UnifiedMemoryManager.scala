@@ -191,6 +191,7 @@ private[spark] class UnifiedMemoryManager(
   }
 }
 
+// 统一内存管理器
 object UnifiedMemoryManager {
 
   // Set aside a fixed amount of memory for non-storage, non-execution purposes.
@@ -200,7 +201,9 @@ object UnifiedMemoryManager {
   private val RESERVED_SYSTEM_MEMORY_BYTES = 300 * 1024 * 1024
 
   def apply(conf: SparkConf, numCores: Int): UnifiedMemoryManager = {
+    // 最大内存
     val maxMemory = getMaxMemory(conf)
+    // 创建统一内存管理器实例
     new UnifiedMemoryManager(
       conf,
       maxHeapMemory = maxMemory,
@@ -213,10 +216,14 @@ object UnifiedMemoryManager {
    * Return the total amount of memory shared between execution and storage, in bytes.
    */
   private def getMaxMemory(conf: SparkConf): Long = {
+    // 系统内存, Java虚拟机使用的最大内存, 即启动虚拟机时的内存
     val systemMemory = conf.get(TEST_MEMORY)
+    // 保留内存, 默认是 300MB
     val reservedMemory = conf.getLong(TEST_RESERVED_MEMORY.key,
       if (conf.contains(IS_TESTING)) 0 else RESERVED_SYSTEM_MEMORY_BYTES)
+    // 最小系统内存 = 保留内存 * 1.5
     val minSystemMemory = (reservedMemory * 1.5).ceil.toLong
+
     if (systemMemory < minSystemMemory) {
       throw new SparkIllegalArgumentException(
         errorClass = "INVALID_DRIVER_MEMORY",
@@ -237,8 +244,12 @@ object UnifiedMemoryManager {
             "config" -> config.EXECUTOR_MEMORY.key))
       }
     }
+    // 可用内存 = 系统内存 - 保留内存
     val usableMemory = systemMemory - reservedMemory
+    // 内存分数, 默认是 0.6
     val memoryFraction = conf.get(config.MEMORY_FRACTION)
+
+    // 最大内存 = 可用内存 * 内存分数(0.6)
     (usableMemory * memoryFraction).toLong
   }
 }

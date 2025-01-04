@@ -683,6 +683,7 @@ private[spark] class Executor(
             }
           }
         }
+        // 失败处理
         task.context.fetchFailed.foreach { fetchFailure =>
           // uh-oh.  it appears the user code has caught the fetch-failure without throwing any
           // other exceptions.  Its *possible* this is what the user meant to do (though highly
@@ -784,6 +785,7 @@ private[spark] class Executor(
         }
 
         executorSource.SUCCEEDED_TASKS.inc(1L)
+        // 设置任务结束状态
         setTaskFinishedAndClearInterruptStatus()
         plugins.foreach(_.onTaskSucceeded())
         // 更新任务状态为完成,发送序列化的结果

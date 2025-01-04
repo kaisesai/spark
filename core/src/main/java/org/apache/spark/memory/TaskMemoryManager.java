@@ -86,6 +86,8 @@ public class TaskMemoryManager {
    * off-heap addresses. When using an off-heap allocator, every entry in this map will be `null`.
    * When using an on-heap allocator, the entries in this map will point to pages' base objects.
    * Entries are added to this map as new data pages are allocated.
+   * <p/>
+   * 连续的内存块
    */
   private final MemoryBlock[] pageTable = new MemoryBlock[PAGE_TABLE_SIZE];
 
@@ -474,13 +476,17 @@ public class TaskMemoryManager {
    */
   public Object getPage(long pagePlusOffsetAddress) {
     if (tungstenMemoryMode == MemoryMode.ON_HEAP) {
+      // 堆内存
       final int pageNumber = decodePageNumber(pagePlusOffsetAddress);
       assert (pageNumber >= 0 && pageNumber < PAGE_TABLE_SIZE);
+      // 内存快
       final MemoryBlock page = pageTable[pageNumber];
       assert (page != null);
       assert (page.getBaseObject() != null);
+      // 基础内存对象
       return page.getBaseObject();
     } else {
+      // 非堆内存
       return null;
     }
   }

@@ -144,7 +144,9 @@ private[spark] class IndexShuffleBlockResolver(
       shuffleId: Int,
       mapId: Long,
       dirs: Option[Array[String]] = None): File = {
+    // 块ID
     val blockId = ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID)
+    // 文件
     dirs
       .map(d =>
         new File(ExecutorDiskUtils.getFilePath(d, blockManager.subDirsPerLocalDir, blockId.name)))
@@ -389,9 +391,13 @@ private[spark] class IndexShuffleBlockResolver(
       lengths: Array[Long],
       checksums: Array[Long],
       dataTmp: File): Unit = {
+
+    // 索引文件
     val indexFile = getIndexFile(shuffleId, mapId)
+    // 创建索引文件
     val indexTmp = createTempFile(indexFile)
 
+    // 检查文件
     val checksumEnabled = checksums.nonEmpty
     val (checksumFileOpt, checksumTmpOpt) = if (checksumEnabled) {
       assert(lengths.length == checksums.length,
@@ -404,6 +410,7 @@ private[spark] class IndexShuffleBlockResolver(
     }
 
     try {
+      // 数据文件
       val dataFile = getDataFile(shuffleId, mapId)
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.

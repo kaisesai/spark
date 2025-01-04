@@ -72,6 +72,7 @@ public class LocalDiskShuffleExecutorComponents implements ShuffleExecutorCompon
       throw new IllegalStateException(
           "Executor components must be initialized before getting writers.");
     }
+    // 本地磁盘输出写入器
     return new LocalDiskShuffleMapOutputWriter(
         shuffleId, mapTaskId, numPartitions, blockResolver, sparkConf);
   }

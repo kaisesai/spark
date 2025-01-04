@@ -104,10 +104,12 @@ private[spark] trait ShuffleManager {
  */
 private[spark] object ShuffleManager {
   def create(conf: SparkConf, isDriver: Boolean): ShuffleManager = {
+    // 创建一个 shuffle manager
     Utils.instantiateSerializerOrShuffleManager[ShuffleManager](
       getShuffleManagerClassName(conf), conf, isDriver)
   }
 
+  // 获取 shuffle manager 的类类名称
   def getShuffleManagerClassName(conf: SparkConf): String = {
     val shortShuffleMgrNames = Map(
       "sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName,

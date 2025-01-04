@@ -74,7 +74,10 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     this.mapSideCombine = mapSideCombine
     this
   }
-
+  /**
+   * 获取依赖时, 创建一个 ShuffleDependency
+   * @return
+   */
   override def getDependencies: Seq[Dependency[_]] = {
     val serializer = userSpecifiedSerializer.getOrElse {
       val serializerManager = SparkEnv.get.serializerManager
@@ -84,6 +87,7 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
         serializerManager.getSerializer(implicitly[ClassTag[K]], implicitly[ClassTag[V]])
       }
     }
+    // 创建 ShuffleDependency 依赖
     List(new ShuffleDependency(prev, part, serializer, keyOrdering, aggregator, mapSideCombine))
   }
 
@@ -105,8 +109,10 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
   override def compute(split: Partition, context: TaskContext): Iterator[(K, C)] = {
     val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
     val metrics = context.taskMetrics().createTempShuffleReadMetrics()
+    // 获取 shuffle reader
     SparkEnv.get.shuffleManager.getReader(
       dep.shuffleHandle, split.index, split.index + 1, context, metrics)
+      // 执行读取
       .read()
       .asInstanceOf[Iterator[(K, C)]]
   }

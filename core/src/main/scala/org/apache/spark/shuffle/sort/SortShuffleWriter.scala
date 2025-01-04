@@ -50,25 +50,37 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
+    // 排序器
     sorter = if (dep.mapSideCombine) {
+      // 扩展排序器
       new ExternalSorter[K, V, C](
         context, dep.aggregator, Some(dep.partitioner), dep.keyOrdering, dep.serializer)
     } else {
       // In this case we pass neither an aggregator nor an ordering to the sorter, because we don't
       // care whether the keys get sorted in each partition; that will be done on the reduce side
       // if the operation being run is sortByKey.
+      // 扩展排序器
       new ExternalSorter[K, V, V](
         context, aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
+
+    // 插入记录
     sorter.insertAll(records)
 
     // Don't bother including the time to open the merged output file in the shuffle write time,
     // because it just opens a single file, so is typically too fast to measure accurately
     // (see SPARK-3570).
+    // 创建映射输出写入器
     val mapOutputWriter = shuffleExecutorComponents.createMapOutputWriter(
       dep.shuffleId, mapId, dep.partitioner.numPartitions)
+
+    // 排序写入分区输出器
     sorter.writePartitionedMapOutput(dep.shuffleId, mapId, mapOutputWriter, writeMetrics)
+
+    // 分区长度
     partitionLengths = mapOutputWriter.commitAllPartitions(sorter.getChecksums).getPartitionLengths
+
+    // 映射状态
     mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths, mapId)
   }
 
@@ -101,10 +113,12 @@ private[spark] class SortShuffleWriter[K, V, C](
 private[spark] object SortShuffleWriter {
   def shouldBypassMergeSort(conf: SparkConf, dep: ShuffleDependency[_, _, _]): Boolean = {
     // We cannot bypass sorting if we need to do map-side aggregation.
+    // side 联合关闭
     if (dep.mapSideCombine) {
       false
     } else {
       val bypassMergeThreshold: Int = conf.get(config.SHUFFLE_SORT_BYPASS_MERGE_THRESHOLD)
+      // 分区数量小于等于 200
       dep.partitioner.numPartitions <= bypassMergeThreshold
     }
   }

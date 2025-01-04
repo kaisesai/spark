@@ -107,11 +107,12 @@ private[spark] class ShuffleMapTask(
     }
     // 使用 shuffle 进行 write 操作
     dep.shuffleWriterProcessor.write(
-      rdd.iterator(partition, context),
-      dep,
-      mapId,
-      partitionId,
-      context)
+          rdd.iterator(partition, context),
+          dep,
+          mapId,
+          partitionId,
+          context
+        )
   }
 
   override def preferredLocations: Seq[TaskLocation] = preferredLocs

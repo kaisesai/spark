@@ -145,8 +145,11 @@ private[spark] class DiskBlockObjectWriter(
   }
 
   private def initialize(): Unit = {
+    // 创建文件输出流
     fos = new FileOutputStream(file, true)
+    // 获取通道
     channel = fos.getChannel()
+    // 时间跟踪输出流
     ts = new TimeTrackingOutputStream(writeMetrics, fos)
     if (checksumEnabled) {
       assert(this.checksum != null, "Checksum is not set")
@@ -156,20 +159,25 @@ private[spark] class DiskBlockObjectWriter(
     class ManualCloseBufferedOutputStream
       extends BufferedOutputStream(if (checksumEnabled) checksumOutputStream else ts, bufferSize)
         with ManualCloseOutputStream
+    // 手动关闭缓冲区输出流
     mcs = new ManualCloseBufferedOutputStream
   }
 
+  // 打开流
   def open(): DiskBlockObjectWriter = {
     if (hasBeenClosed) {
       throw SparkException.internalError(
         "Writer already closed. Cannot be reopened.", category = "STORAGE")
     }
+
+    // 初始化输出流
     if (!initialized) {
       initialize()
       initialized = true
     }
-
+    // 包装输出流
     bs = serializerManager.wrapStream(blockId, mcs)
+    // 最终的包装序列化流
     objOut = serializerInstance.serializeStream(bs)
     streamOpen = true
     this
@@ -237,6 +245,7 @@ private[spark] class DiskBlockObjectWriter(
     if (streamOpen) {
       // NOTE: Because Kryo doesn't flush the underlying stream we explicitly flush both the
       //       serializer stream and the lower level stream.
+      // 刷新文件输出流,将内存数据写入到文件
       objOut.flush()
       bs.flush()
       objOut.close()
@@ -250,6 +259,8 @@ private[spark] class DiskBlockObjectWriter(
       }
 
       val pos = channel.position()
+
+      // 创建文件片段
       val fileSegment = new FileSegment(file, committedPosition, pos - committedPosition)
       committedPosition = pos
       // In certain compression codecs, more bytes are written after streams are closed
@@ -329,12 +340,16 @@ private[spark] class DiskBlockObjectWriter(
    * Writes a key-value pair.
    */
   override def write(key: Any, value: Any): Unit = {
+    // 打开文件输出流
     if (!streamOpen) {
       open()
     }
 
+    // 写入key
     objOut.writeKey(key)
+    // 写入值
     objOut.writeValue(value)
+    // 记录写入
     recordWritten()
   }
 
@@ -344,7 +359,7 @@ private[spark] class DiskBlockObjectWriter(
     if (!streamOpen) {
       open()
     }
-
+    // 写入包装输出流
     bs.write(kvBytes, offs, len)
   }
 
@@ -353,9 +368,11 @@ private[spark] class DiskBlockObjectWriter(
    */
   def recordWritten(): Unit = {
     numRecordsWritten += 1
+    // 计数器加1
     writeMetrics.incRecordsWritten(1)
 
     if (numRecordsWritten % 16384 == 0) {
+      // 更新
       updateBytesWritten()
     }
   }
@@ -365,7 +382,9 @@ private[spark] class DiskBlockObjectWriter(
    * Note that this is only valid before the underlying streams are closed.
    */
   private def updateBytesWritten(): Unit = {
+    // 通道的偏移量
     val pos = channel.position()
+    // 记录数据
     writeMetrics.incBytesWritten(pos - reportedPosition)
     reportedPosition = pos
   }

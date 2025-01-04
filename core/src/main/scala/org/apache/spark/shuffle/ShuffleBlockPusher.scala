@@ -122,7 +122,9 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
     if (pushRequests.isEmpty) {
       notifyDriverAboutPushCompletion()
     } else {
+      // 提交任务,推送 shuffle 的文件数据到远程服务器
       submitTask(() => {
+        // 推送任务
         tryPushUpToMax()
       })
     }
@@ -220,6 +222,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
     val blockIds = request.blocks.map(_._1.toString)
     val remainingBlocks = new HashSet[String]() ++= blockIds
 
+    // 块推送监听器
     val blockPushListener = new BlockPushingListener {
       // Initiating a connection and pushing blocks to a remote shuffle service is always handled by
       // the block-push-threads. We should not initiate the connection creation in the
@@ -231,7 +234,9 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       // Once the blockPushListener is notified of the block push success or failure, we
       // just delegate it to block-push-threads.
       def handleResult(result: PushResult): Unit = {
+        // 异步任务
         submitTask(() => {
+          // 更新状态
           if (updateStateAndCheckIfPushMore(
             sizeMap(result.blockId), address, remainingBlocks, result)) {
             tryPushUpToMax()
@@ -262,6 +267,8 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
     // the in-memory sliced buffers post reading.
     val (blockPushIds, blockPushBuffers) = Utils.randomize(blockIds.zip(
       sliceReqBufferIntoBlockBuffers(request.reqBuffer, request.blocks.map(_._2)))).unzip
+
+    // 推送数据到 块存储服务器
     SparkEnv.get.blockManager.blockStoreClient.pushBlocks(
       address.host, address.port, blockPushIds.toArray,
       blockPushBuffers.toArray, blockPushListener)
@@ -342,6 +349,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       return false
     } else {
       if (reqsInFlight <= 0 && pushRequests.isEmpty && deferredPushRequests.isEmpty) {
+        // 通知driver推送完成
         notifyDriverAboutPushCompletion()
       }
       remainingBlocks.isEmpty && (pushRequests.nonEmpty || deferredPushRequests.nonEmpty)
@@ -360,6 +368,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
     if (!pushCompletionNotified) {
       SparkEnv.get.executorBackend match {
         case Some(cb: CoarseGrainedExecutorBackend) =>
+          // 推送完成
           cb.notifyDriverAboutPushCompletion(shuffleId, shuffleMergeId, mapIndex)
         case Some(eb: ExecutorBackend) =>
           logWarning(log"Currently ${MDC(EXECUTOR_BACKEND, eb)} " +
@@ -505,7 +514,8 @@ private[spark] object ShuffleBlockPusher {
         isDriver = SparkContext.DRIVER_IDENTIFIER == SparkEnv.get.executorId)) {
       val numThreads = conf.get(SHUFFLE_NUM_PUSH_THREADS)
         .getOrElse(conf.getInt(SparkLauncher.EXECUTOR_CORES, 1))
-      ThreadUtils.newDaemonFixedThreadPool(numThreads, "shuffle-block-push-thread")
+       // 固定线程池
+       ThreadUtils.newDaemonFixedThreadPool(numThreads, "shuffle-block-push-thread")
     } else {
       null
     }

@@ -485,6 +485,7 @@ private[spark] class DAGScheduler(
           // shuffleIdToMapStage by the stage creation process for an earlier dependency. See
           // SPARK-13902 for more information.
           if (!shuffleIdToMapStage.contains(dep.shuffleId)) {
+            // 创建 shuffle map stage
             createShuffleMapStage(dep, firstJobId)
           }
         }
@@ -519,6 +520,7 @@ private[spark] class DAGScheduler(
   def createShuffleMapStage[K, V, C](
       shuffleDep: ShuffleDependency[K, V, C], jobId: Int): ShuffleMapStage = {
     val rdd = shuffleDep.rdd
+    // 创建 shuffle map stage
     val (shuffleDeps, resourceProfiles) = getShuffleDependenciesAndResourceProfiles(rdd)
     val resourceProfile = mergeResourceProfilesForStage(resourceProfiles)
     checkBarrierStageWithDynamicAllocation(rdd)
@@ -527,6 +529,8 @@ private[spark] class DAGScheduler(
     val numTasks = rdd.partitions.length
     val parents = getOrCreateParentStages(shuffleDeps, jobId)
     val id = nextStageId.getAndIncrement()
+
+    // stage 上有 shuffleDep
     val stage = new ShuffleMapStage(
       id, rdd, numTasks, parents, jobId, rdd.creationSite, shuffleDep, mapOutputTracker,
       resourceProfile.id)
@@ -652,6 +656,7 @@ private[spark] class DAGScheduler(
       partitions: Array[Int],
       jobId: Int,
       callSite: CallSite): ResultStage = {
+    // 获取 result stage
     val (shuffleDeps, resourceProfiles) = getShuffleDependenciesAndResourceProfiles(rdd)
     val resourceProfile = mergeResourceProfilesForStage(resourceProfiles)
     checkBarrierStageWithDynamicAllocation(rdd)
@@ -692,7 +697,7 @@ private[spark] class DAGScheduler(
       val toVisit = waitingForVisit.remove(0)
       if (!visited(toVisit)) {
         visited += toVisit
-        // 获取属性
+        // 获取属性, 获取 Shuff了
         val (shuffleDeps, _) = getShuffleDependenciesAndResourceProfiles(toVisit)
         shuffleDeps.foreach { shuffleDep =>
           if (!shuffleIdToMapStage.contains(shuffleDep.shuffleId)) {
@@ -730,6 +735,7 @@ private[spark] class DAGScheduler(
       if (!visited(toVisit)) {
         visited += toVisit
         Option(toVisit.getResourceProfile()).foreach(resourceProfiles += _)
+        // 遍历 RDD 的所有依赖
         toVisit.dependencies.foreach {
           // 如果是 shuffle依赖, 则添加
           case shuffleDep: ShuffleDependency[_, _, _] =>

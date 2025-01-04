@@ -48,7 +48,10 @@ public class RadixSort {
     assert endByteIndex <= 7 : "endByteIndex (" + endByteIndex + ") should <= 7";
     assert endByteIndex > startByteIndex;
     assert numRecords * 2 <= array.size();
+
+    // 内部索引
     long inIndex = 0;
+    // 外部索引
     long outIndex = numRecords;
     if (numRecords > 0) {
       long[][] counts = getCounts(array, numRecords, startByteIndex, endByteIndex);

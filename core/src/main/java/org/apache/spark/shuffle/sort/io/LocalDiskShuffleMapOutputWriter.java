@@ -86,14 +86,18 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
       throw new IllegalArgumentException("Partitions should be requested in increasing order.");
     }
     lastPartitionId = reducePartitionId;
+
+    // 输出临时文件
     if (outputTempFile == null) {
       outputTempFile = blockResolver.createTempFile(outputFile);
     }
+    // 输出文件通道
     if (outputFileChannel != null) {
       currChannelPosition = outputFileChannel.position();
     } else {
       currChannelPosition = 0L;
     }
+    // 本地磁盘shuffle分区写入器
     return new LocalDiskShufflePartitionWriter(reducePartitionId);
   }
 
@@ -115,6 +119,7 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
     File resolvedTmp = outputTempFile != null && outputTempFile.isFile() ? outputTempFile : null;
     log.debug("Writing shuffle index file for mapId {} with length {}", mapId,
         partitionLengths.length);
+    // 写入元数据并提交
     blockResolver
       .writeMetadataFileAndCommit(shuffleId, mapId, partitionLengths, checksums, resolvedTmp);
     return MapOutputCommitMessage.of(partitionLengths);
@@ -142,9 +147,11 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
   }
 
   private void initStream() throws IOException {
+    // 初始化临时文件输出流
     if (outputFileStream == null) {
       outputFileStream = new FileOutputStream(outputTempFile, true);
     }
+    // 初始化文件缓冲区流
     if (outputBufferedFileStream == null) {
       outputBufferedFileStream = new BufferedOutputStream(outputFileStream, bufferSize);
     }
@@ -154,10 +161,14 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
     // This file needs to opened in append mode in order to work around a Linux kernel bug that
     // affects transferTo; see SPARK-3948 for more details.
     if (outputFileChannel == null) {
+      // 文件输出流的通道
       outputFileChannel = new FileOutputStream(outputTempFile, true).getChannel();
     }
   }
 
+  /**
+   * 本地磁盘shuffle分区写入器类
+   */
   private class LocalDiskShufflePartitionWriter implements ShufflePartitionWriter {
 
     private final int partitionId;
@@ -176,7 +187,9 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
               " now an output stream has been requested. Should not be using both channels" +
               " and streams to write.");
         }
+        // 初始化输出流
         initStream();
+        // 分区写入器流
         partStream = new PartitionWriterStream(partitionId);
       }
       return partStream;
@@ -190,7 +203,9 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
               " now an output channel has been requested. Should not be using both channels" +
               " and streams to write.");
         }
+        // 初始化通道
         initChannel();
+        // 分区器通道
         partChannel = new PartitionWriterChannel(partitionId);
       }
       return Optional.of(partChannel);
@@ -229,6 +244,7 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
     @Override
     public void write(int b) throws IOException {
       verifyNotClosed();
+      // 写入数据
       outputBufferedFileStream.write(b);
       count++;
     }
@@ -236,6 +252,7 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
     @Override
     public void write(byte[] buf, int pos, int length) throws IOException {
       verifyNotClosed();
+      // 文件输出流写入数据
       outputBufferedFileStream.write(buf, pos, length);
       count += length;
     }
@@ -256,6 +273,7 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
 
   private class PartitionWriterChannel implements WritableByteChannelWrapper {
 
+    // 分区ID
     private final int partitionId;
 
     PartitionWriterChannel(int partitionId) {
@@ -269,6 +287,7 @@ public class LocalDiskShuffleMapOutputWriter implements ShuffleMapOutputWriter {
 
     @Override
     public WritableByteChannel channel() {
+      // 返回文件输出流通道
       return outputFileChannel;
     }
 

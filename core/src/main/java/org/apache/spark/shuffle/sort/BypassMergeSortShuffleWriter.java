@@ -137,6 +137,7 @@ final class BypassMergeSortShuffleWriter<K, V>
   @Override
   public void write(Iterator<Product2<K, V>> records) throws IOException {
     assert (partitionWriters == null);
+    // 映射输出书写器
     ShuffleMapOutputWriter mapOutputWriter = shuffleExecutorComponents
         .createMapOutputWriter(shuffleId, mapId, numPartitions);
     try {
@@ -147,20 +148,34 @@ final class BypassMergeSortShuffleWriter<K, V>
           blockManager.shuffleServerId(), partitionLengths, mapId);
         return;
       }
+      // 序列化器
       final SerializerInstance serInstance = serializer.newInstance();
       final long openStartTime = System.nanoTime();
+
+      // 分区的磁盘块分区书写器数组
       partitionWriters = new DiskBlockObjectWriter[numPartitions];
+
+      // 文件片段
       partitionWriterSegments = new FileSegment[numPartitions];
+
+      // 为分区器设置 writer
       for (int i = 0; i < numPartitions; i++) {
+        // 临时 shuffle 块 ID
         final Tuple2<TempShuffleBlockId, File> tempShuffleBlockIdPlusFile =
             blockManager.diskBlockManager().createTempShuffleBlock();
+        // 文件
         final File file = tempShuffleBlockIdPlusFile._2();
+        // 块ID
         final BlockId blockId = tempShuffleBlockIdPlusFile._1();
+
+        // 磁盘块对象写入器
         DiskBlockObjectWriter writer =
           blockManager.getDiskWriter(blockId, file, serInstance, fileBufferSize, writeMetrics);
+
         if (partitionChecksums.length > 0) {
           writer.setChecksum(partitionChecksums[i]);
         }
+        // 为每个分区赋值磁盘块写入器
         partitionWriters[i] = writer;
       }
       // Creating the file to write to and creating a disk writer both involve interacting with
@@ -168,19 +183,28 @@ final class BypassMergeSortShuffleWriter<K, V>
       // included in the shuffle write time.
       writeMetrics.incWriteTime(System.nanoTime() - openStartTime);
 
+      // 将记录写入磁盘
       while (records.hasNext()) {
+        // 获取记录
         final Product2<K, V> record = records.next();
+        // 获取分区 key
         final K key = record._1();
+        // 获取分区上对应的磁盘书写器,执行写入记录数据, 将记录写入分区文件输出流里
         partitionWriters[partitioner.getPartition(key)].write(key, record._2());
       }
 
+      // 提交磁盘书写器
       for (int i = 0; i < numPartitions; i++) {
         try (DiskBlockObjectWriter writer = partitionWriters[i]) {
+          // 提交分区数据文件输出流, 并获取文件片段
           partitionWriterSegments[i] = writer.commitAndGet();
         }
       }
 
+      // 将分区文件组合一个文件中
       partitionLengths = writePartitionedData(mapOutputWriter);
+
+      // 文件状态
       mapStatus = MapStatus$.MODULE$.apply(
         blockManager.shuffleServerId(), partitionLengths, mapId);
     } catch (Exception e) {
@@ -209,20 +233,27 @@ final class BypassMergeSortShuffleWriter<K, V>
     if (partitionWriters != null) {
       final long writeStartTime = System.nanoTime();
       try {
+        // 遍历所有分区
         for (int i = 0; i < numPartitions; i++) {
+          // 获取每个分区的小文件
           final File file = partitionWriterSegments[i].file();
+          // 获取分区对应的 shuffle 分区写入器
           ShufflePartitionWriter writer = mapOutputWriter.getPartitionWriter(i);
           if (file.exists()) {
             if (transferToEnabled) {
               // Using WritableByteChannelWrapper to make resource closing consistent between
               // this implementation and UnsafeShuffleWriter.
+              // 打开通道包装器
               Optional<WritableByteChannelWrapper> maybeOutputChannel = writer.openChannelWrapper();
               if (maybeOutputChannel.isPresent()) {
+                // 使用通道将文件写入写入器
                 writePartitionedDataWithChannel(file, maybeOutputChannel.get());
               } else {
+                // 将文件写入分区写入器(普通流模式)
                 writePartitionedDataWithStream(file, writer);
               }
             } else {
+              // 将文件写入分区写入器
               writePartitionedDataWithStream(file, writer);
             }
             if (!file.delete()) {
@@ -236,6 +267,7 @@ final class BypassMergeSortShuffleWriter<K, V>
       }
       partitionWriters = null;
     }
+    // 提交索引的分区, 创建索引文件以及数据文件
     return mapOutputWriter.commitAllPartitions(getChecksumValues(partitionChecksums))
       .getPartitionLengths();
   }
@@ -245,8 +277,11 @@ final class BypassMergeSortShuffleWriter<K, V>
       WritableByteChannelWrapper outputChannel) throws IOException {
     boolean copyThrewException = true;
     try {
+      // 文件输入流
       FileInputStream in = new FileInputStream(file);
+      // 获取文件输入流通道
       try (FileChannel inputChannel = in.getChannel()) {
+        // 使用 NIO 拷贝文件到输出流通道中
         Utils.copyFileStreamNIO(
             inputChannel, outputChannel.channel(), 0L, inputChannel.size());
         copyThrewException = false;
@@ -254,6 +289,7 @@ final class BypassMergeSortShuffleWriter<K, V>
         Closeables.close(in, copyThrewException);
       }
     } finally {
+      // 关闭通道
       Closeables.close(outputChannel, copyThrewException);
     }
   }
@@ -261,11 +297,14 @@ final class BypassMergeSortShuffleWriter<K, V>
   private void writePartitionedDataWithStream(File file, ShufflePartitionWriter writer)
       throws IOException {
     boolean copyThrewException = true;
+    // 文件输入流
     FileInputStream in = new FileInputStream(file);
     OutputStream outputStream;
     try {
+      // 打开流
       outputStream = writer.openStream();
       try {
+        // 拷贝分区的小文件到临时文件中
         Utils.copyStream(in, outputStream, false, false);
         copyThrewException = false;
       } finally {

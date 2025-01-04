@@ -31,6 +31,7 @@ final class ShuffleInMemorySorter {
   private static final class SortComparator implements Comparator<PackedRecordPointer> {
     @Override
     public int compare(PackedRecordPointer left, PackedRecordPointer right) {
+      // 比较分区 ID 排序
       return Integer.compare(left.getPartitionId(), right.getPartitionId());
     }
   }
@@ -179,23 +180,31 @@ final class ShuffleInMemorySorter {
    * Return an iterator over record pointers in sorted order.
    */
   public ShuffleSorterIterator getSortedIterator() {
+    // 返回排好序的元素迭代器
+
     int offset = 0;
     if (useRadixSort) {
+      // 基数排序
       offset = RadixSort.sort(
         array, pos,
         PackedRecordPointer.PARTITION_ID_START_BYTE_INDEX,
         PackedRecordPointer.PARTITION_ID_END_BYTE_INDEX, false, false);
     } else {
+      // 普通排序
       MemoryBlock unused = new MemoryBlock(
         array.getBaseObject(),
         array.getBaseOffset() + pos * 8L,
         (array.size() - pos) * 8L);
+      // 数据
       LongArray buffer = new LongArray(unused);
+      // 排序器,默认使用 tim 排序
       Sorter<PackedRecordPointer, LongArray> sorter =
         new Sorter<>(new ShuffleSortDataFormat(buffer));
 
       sorter.sort(array, 0, pos, SORT_COMPARATOR);
     }
+
+    // 返回已经排好序的迭代器
     return new ShuffleSorterIterator(pos, array, offset);
   }
 }

@@ -171,6 +171,7 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   def notifyDriverAboutPushCompletion(shuffleId: Int, shuffleMergeId: Int, mapIndex: Int): Unit = {
+    // 给 driver 发送 shuffle 推送完成
     val msg = ShufflePushCompletion(shuffleId, shuffleMergeId, mapIndex)
     driver.foreach(_.send(msg))
   }
@@ -502,6 +503,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       driverConf.set(EXECUTOR_ID, arguments.executorId)
       cfg.logLevel.foreach(logLevel => Utils.setLogLevelIfNeeded(logLevel))
 
+      // 创建spark Executor env 环境基础设置
       // sparkEnv executorEnv
       val env = SparkEnv.createExecutorEnv(driverConf, arguments.executorId, arguments.bindAddress,
         arguments.hostname, arguments.cores, cfg.ioEncryptionKey, isLocal = false)
