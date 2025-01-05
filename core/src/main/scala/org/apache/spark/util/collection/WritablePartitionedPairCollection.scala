@@ -47,7 +47,9 @@ private[spark] trait WritablePartitionedPairCollection[K, V] {
    */
   def destructiveSortedWritablePartitionedIterator(keyComparator: Option[Comparator[K]])
     : WritablePartitionedIterator[K, V] = {
+    // 将数据进行排序, 并返回一个迭代器
     val it = partitionedDestructiveSortedIterator(keyComparator)
+    // 创建一个迭代器
     new WritablePartitionedIterator[K, V](it)
   }
 }
@@ -55,6 +57,9 @@ private[spark] trait WritablePartitionedPairCollection[K, V] {
 private[spark] object WritablePartitionedPairCollection {
   /**
    * A comparator for (Int, K) pairs that orders them by only their partition ID.
+   *
+   * <p/>
+   * 一个分区比较器, 仅按照它们的分区ID进行比较
    */
   def partitionComparator[K]: Comparator[(Int, K)] = (a: (Int, K), b: (Int, K)) => a._1 - b._1
 
@@ -63,10 +68,12 @@ private[spark] object WritablePartitionedPairCollection {
    */
   def partitionKeyComparator[K](keyComparator: Comparator[K]): Comparator[(Int, K)] =
     (a: (Int, K), b: (Int, K)) => {
+      // 分区 key 的比较器函数, 分区ID不同, 返回分区ID之差,其实也就是大于或小于的意思
       val partitionDiff = a._1 - b._1
       if (partitionDiff != 0) {
         partitionDiff
       } else {
+        // 分区号相同时, 使用 key 排序器排序比较两个 key
         keyComparator.compare(a._2, b._2)
       }
     }
@@ -80,7 +87,9 @@ private[spark] class WritablePartitionedIterator[K, V](it: Iterator[((Int, K), V
   private[this] var cur = if (it.hasNext) it.next() else null
 
   def writeNext(writer: PairsWriter): Unit = {
+    // 写入 writer 数据中
     writer.write(cur._1._2, cur._2)
+    // 返回写一条数据
     cur = if (it.hasNext) it.next() else null
   }
 

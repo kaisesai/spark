@@ -101,11 +101,14 @@ case class HashAggregateExec(
 
       val beforeAgg = System.nanoTime()
       val hasInput = iter.hasNext
+
+      // 结果
       val res = if (!hasInput && groupingExpressions.nonEmpty) {
         // This is a grouped aggregate and the input iterator is empty,
         // so return an empty iterator.
         Iterator.empty
       } else {
+        // 创建一个聚合迭代器
         val aggregationIterator =
           new TungstenAggregationIterator(
             partIndex,
@@ -221,6 +224,7 @@ case class HashAggregateExec(
 
     // merge the final hashMap into sorter
     numTasksFallBacked += 1
+    // 合并文件
     sorter.merge(hashMap.destructAndCreateExternalSorter())
     hashMap.free()
     val sortedIter = sorter.sortedIterator()

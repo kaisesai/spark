@@ -85,10 +85,14 @@ abstract class SortDataFormat[K, Buffer] {
 private[spark]
 class KVArraySortDataFormat[K, T <: AnyRef : ClassTag] extends SortDataFormat[K, Array[T]] {
 
+  // 从数组中获取key
   override def getKey(data: Array[T], pos: Int): K = data(2 * pos).asInstanceOf[K]
 
+  // 交换数据, 将 pos0 与 pos1 位置的 key value 数据进行交换
   override def swap(data: Array[T], pos0: Int, pos1: Int): Unit = {
+    // 临时key
     val tmpKey = data(2 * pos0)
+    // 临时value
     val tmpVal = data(2 * pos0 + 1)
     data(2 * pos0) = data(2 * pos1)
     data(2 * pos0 + 1) = data(2 * pos1 + 1)

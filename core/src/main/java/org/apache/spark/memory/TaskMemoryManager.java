@@ -210,6 +210,7 @@ public class TaskMemoryManager {
             currentEntry = sortedConsumers.lastEntry();
           }
           List<MemoryConsumer> cList = currentEntry.getValue();
+          // 尝试溢写
           got += trySpillAndAcquire(requestingConsumer, required - got, cList, cList.size() - 1);
           if (cList.isEmpty()) {
             sortedConsumers.remove(currentEntry.getKey());
@@ -260,6 +261,7 @@ public class TaskMemoryManager {
         Utils.bytesToString(requested), consumerToSpill, requestingConsumer);
     }
     try {
+      // 尝试排序溢写
       long released = consumerToSpill.spill(requested, requestingConsumer);
       if (released > 0) {
         if (logger.isDebugEnabled()) {
@@ -370,6 +372,7 @@ public class TaskMemoryManager {
       throw new TooLargePageException(size);
     }
 
+    // 分配页数据
     long acquired = acquireExecutionMemory(size, consumer);
     if (acquired <= 0) {
       return null;

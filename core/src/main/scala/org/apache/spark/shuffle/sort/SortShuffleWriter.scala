@@ -64,7 +64,7 @@ private[spark] class SortShuffleWriter[K, V, C](
         context, aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
 
-    // 插入记录
+    // 插入记录(数据在插入时,按照分区以及是否合并数据归类数据, 就是在做排序的工作)
     sorter.insertAll(records)
 
     // Don't bother including the time to open the merged output file in the shuffle write time,

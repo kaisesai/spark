@@ -131,6 +131,7 @@ private[spark] class BlockStoreShuffleReader[K, C](
           new ExternalSorter[K, C, C](context, ordering = Some(dep.keyOrdering.get),
             serializer = dep.serializer)
         }
+        // 排序数据,溢写/合并数据
         sorter.insertAllAndUpdateMetrics(interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]])
       } else if (dep.aggregator.isDefined) {
         if (dep.mapSideCombine) {

@@ -321,6 +321,7 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
       return 0L;
     }
 
+    // 写入排序文件
     writeSortedFile(false);
     final long spillSize = freeMemory();
     inMemSorter.reset();
@@ -484,6 +485,7 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
     if (inMemSorter != null) {
       // Here we are spilling the remaining data in the buffer. If there is no spill before, this
       // final spill file will be the final shuffle output file.
+      // 溢写文件
       writeSortedFile(/* isFinalFile = */spills.isEmpty());
       freeMemory();
       inMemSorter.free();

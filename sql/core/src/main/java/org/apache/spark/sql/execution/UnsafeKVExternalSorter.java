@@ -155,6 +155,7 @@ public final class UnsafeKVExternalSorter {
         inMemSorter.insertRecord(address, prefix.value, prefix.isNull);
       }
 
+      // 创建溢写排序器
       sorter = UnsafeExternalSorter.createWithExistingInMemorySorter(
         taskMemoryManager,
         blockManager,

@@ -5091,12 +5091,14 @@ class DAGSchedulerAbortStageOffSuite extends DAGSchedulerSuite {
 }
 
 object DAGSchedulerSuite {
+  // shuffle 的目标地址
   val mergerLocs = ArrayBuffer[BlockManagerId]()
 
   def makeMapStatus(host: String, reduces: Int, sizes: Byte = 2, mapTaskId: Long = -1): MapStatus =
     MapStatus(makeBlockManagerId(host), Array.fill[Long](reduces)(sizes), mapTaskId)
 
   def makeBlockManagerId(host: String, execId: Option[String] = None): BlockManagerId = {
+    // 生成块管理ID
     BlockManagerId(execId.getOrElse(host + "-exec"), host, 12345)
   }
 
@@ -5131,11 +5133,13 @@ private class PushBasedSchedulerBackend(
   override def getShufflePushMergerLocations(
       numPartitions: Int,
       resourceProfileId: Int): Seq[BlockManagerId] = {
+    // Shuffle 推送的目标地址, 推挤
     val mergerLocations = Utils.randomize(DAGSchedulerSuite.mergerLocs).take(numPartitions)
     if (mergerLocations.size < numPartitions && mergerLocations.size <
       conf.getInt(config.SHUFFLE_MERGER_LOCATIONS_MIN_STATIC_THRESHOLD.key, 5)) {
       Seq.empty[BlockManagerId]
     } else {
+      // Shuffle 推送的目标地址
       mergerLocations
     }
   }

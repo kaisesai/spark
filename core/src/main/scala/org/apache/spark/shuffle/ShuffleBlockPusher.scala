@@ -107,19 +107,27 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       partitionLengths: Array[Long],
       dep: ShuffleDependency[_, _, _],
       mapIndex: Int): Unit = {
+    // 初始化块推送行为
+
+    // 分区数
     val numPartitions = dep.partitioner.numPartitions
     val securityManager = new SecurityManager(conf)
+    // 传输配置
     val transportConf = SparkTransportConf.fromSparkConf(
       conf, "shuffle", sslOptions = Some(securityManager.getRpcSSLOptions()))
     this.shuffleId = dep.shuffleId
     this.shuffleMergeId = dep.shuffleMergeId
     this.mapIndex = mapIndex
+
+    // 准备块推数请求对象
     val requests = prepareBlockPushRequests(numPartitions, mapIndex, dep.shuffleId,
       dep.shuffleMergeId, dataFile, partitionLengths, dep.getMergerLocs, transportConf)
     // Randomize the orders of the PushRequest, so different mappers pushing blocks at the same
     // time won't be pushing the same ranges of shuffle partitions.
+    // 添加到推送队列中
     pushRequests ++= Utils.randomize(requests)
     if (pushRequests.isEmpty) {
+      // 通知 driver 推送完成
       notifyDriverAboutPushCompletion()
     } else {
       // 提交任务,推送 shuffle 的文件数据到远程服务器
@@ -132,6 +140,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
 
   private[shuffle] def tryPushUpToMax(): Unit = {
     try {
+      // 推送
       pushUpToMax()
     } catch {
       case NonFatal(e) =>
@@ -145,6 +154,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
    */
   protected def submitTask(task: Runnable): Unit = {
     if (BLOCK_PUSHER_POOL != null && !BLOCK_PUSHER_POOL.isShutdown) {
+      // 执行任务
       BLOCK_PUSHER_POOL.execute(task)
     }
   }
@@ -168,6 +178,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
           val request = defReqQueue.dequeue()
           logDebug(s"Processing deferred push request for $remoteAddress with "
             + s"${request.blocks.length} blocks")
+          // 发送请求
           sendRequest(request)
           if (defReqQueue.isEmpty) {
             deferredPushRequests -= remoteAddress
@@ -182,6 +193,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       val remoteAddress = request.address
       if (isRemoteAddressMaxedOut(remoteAddress, request)) {
         logDebug(s"Deferring push request for $remoteAddress with ${request.blocks.size} blocks")
+        // 添加推送
         deferredPushRequests.getOrElseUpdate(remoteAddress, new Queue[PushRequest]())
           .enqueue(request)
       } else {
@@ -417,13 +429,17 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
     val numMergers = mergerLocs.length
     val requests = new ArrayBuffer[PushRequest]
     var blocks = new ArrayBuffer[(BlockId, Int)]
+
+    // 遍历分区
     for (reduceId <- 0 until numPartitions) {
+      // 块大小
       val blockSize = partitionLengths(reduceId)
       logDebug(
         s"Block ${ShufflePushBlockId(shuffleId, shuffleMergeId, partitionId,
           reduceId)} is of size $blockSize")
       // Skip 0-length blocks and blocks that are large enough
       if (blockSize > 0) {
+        // 合并ID
         val mergerId = math.min(math.floor(reduceId * 1.0 / numPartitions * numMergers),
           numMergers - 1).asInstanceOf[Int]
         // Start a new PushRequest if the current request goes beyond the max batch size,
@@ -469,6 +485,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
     }
     // Add in the final request
     if (blocks.nonEmpty) {
+      // 添加推送请求
       requests += PushRequest(mergerLocs(currentMergerId), blocks.toSeq,
         createRequestBuffer(transportConf, dataFile, currentReqOffset, currentReqSize))
     }

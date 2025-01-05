@@ -127,30 +127,41 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
    */
   def changeValue(key: K, updateFunc: (Boolean, V) => V): V = {
     assert(!destroyed, destructionMessage)
+
+    // 更新数据
+    // key 为 null
     val k = key.asInstanceOf[AnyRef]
     if (k.eq(null)) {
       if (!haveNullValue) {
         incrementSize()
       }
+      // 更新 value 数据
       nullValue = updateFunc(haveNullValue, nullValue)
       haveNullValue = true
       return nullValue
     }
+    // key 的 hashcode 重新 hash 之后并与 mask 进行按位与计算, 得到一个 position 位置
     var pos = rehash(k.hashCode) & mask
     var i = 1
     while (true) {
+      // 数组中的 key
       val curKey = data(2 * pos)
       if (curKey.eq(null)) {
+        // 为空时, 直接写入数组的 位置上
         val newValue = updateFunc(false, null.asInstanceOf[V])
         data(2 * pos) = k
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
+        // 增加数组大小(可能会扩容)
         incrementSize()
+        // 最后返回新值
         return newValue
       } else if (k.eq(curKey) || k.equals(curKey)) {
+        // 当数组中指定位置存在 key, 则更新 value 值
         val newValue = updateFunc(true, data(2 * pos + 1).asInstanceOf[V])
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         return newValue
       } else {
+        // 数组中指定位置的 key 不是当前 key, 需要线性继续探测
         val delta = i
         pos = (pos + delta) & mask
         i += 1
@@ -201,6 +212,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   private def incrementSize(): Unit = {
     curSize += 1
     if (curSize > growThreshold) {
+      // 扩容
       growTable()
     }
   }
@@ -222,6 +234,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     var oldPos = 0
     while (oldPos < capacity) {
       if (!data(2 * oldPos).eq(null)) {
+        // 重新 hash 赋值写入数组
         val key = data(2 * oldPos)
         val value = data(2 * oldPos + 1)
         var newPos = rehash(key.hashCode) & newMask
@@ -271,8 +284,10 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     }
     assert(curSize == newIndex + (if (haveNullValue) 1 else 0))
 
+    // 进行排序
     new Sorter(new KVArraySortDataFormat[K, AnyRef]).sort(data, 0, newIndex, keyComparator)
 
+    // 返回一个迭代器
     new Iterator[(K, V)] {
       var i = 0
       var nullValueReady = haveNullValue

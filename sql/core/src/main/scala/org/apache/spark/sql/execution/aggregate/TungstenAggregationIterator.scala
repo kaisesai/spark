@@ -205,6 +205,7 @@ class TungstenAggregationIterator(
           if (externalSorter == null) {
             externalSorter = sorter
           } else {
+            // 合并操作
             externalSorter.merge(sorter)
           }
           i = 0
@@ -216,12 +217,14 @@ class TungstenAggregationIterator(
             // scalastyle:on throwerror
           }
         }
+        // 处理行数据
         processRow(buffer, newInput)
         i += 1
       }
 
       if (externalSorter != null) {
         val sorter = hashMap.destructAndCreateExternalSorter()
+        // 合并数据
         externalSorter.merge(sorter)
         hashMap.free()
 
@@ -366,6 +369,7 @@ class TungstenAggregationIterator(
   /**
    * Start processing input rows.
    */
+  // 处理输出数据, 涉及到合并数据
   processInputs(testFallbackStartsAt.getOrElse((Int.MaxValue, Int.MaxValue)))
 
   // If we did not switch to sort-based aggregation in processInputs,

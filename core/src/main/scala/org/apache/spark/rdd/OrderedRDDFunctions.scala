@@ -77,7 +77,9 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
     if (self.partitioner == Some(partitioner)) {
       self.mapPartitions(iter => {
         val context = TaskContext.get()
+        // 创建排序器
         val sorter = new ExternalSorter[K, V, V](context, None, None, Some(ordering))
+        // 排序数据/溢写数据/合并溢写小文件
         new InterruptibleIterator(context,
           sorter.insertAllAndUpdateMetrics(iter).asInstanceOf[Iterator[(K, V)]])
       }, preservesPartitioning = true)

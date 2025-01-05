@@ -69,6 +69,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
         // Check if sufficient shuffle mergers are available now for the ShuffleMapTask to push
         if (dep.shuffleMergeAllowed && dep.getMergerLocs.isEmpty) {
           val mapOutputTracker = SparkEnv.get.mapOutputTracker
+          // 合并的位置, 即数据块推送到的目标服务器ID
           val mergerLocs =
             mapOutputTracker.getShufflePushMergerLocations(dep.shuffleId)
           if (mergerLocs.nonEmpty) {

@@ -93,6 +93,8 @@ private[spark] class DiskBlockManager(
   // This method should be kept in sync with
   // org.apache.spark.network.shuffle.ExecutorDiskUtils#getFilePath().
   def getFile(filename: String): File = {
+    // 返回一个文件
+
     // Figure out which local directory it hashes to, and which subdirectory in that
     val hash = Utils.nonNegativeHash(filename)
     val dirId = hash % localDirs.length
@@ -220,10 +222,12 @@ private[spark] class DiskBlockManager(
 
   /** Produces a unique block id and File suitable for storing local intermediate results. */
   def createTempLocalBlock(): (TempLocalBlockId, File) = {
+    // 使用UUID创建一个块ID临时文件
     var blockId = TempLocalBlockId(UUID.randomUUID())
     while (getFile(blockId).exists()) {
       blockId = TempLocalBlockId(UUID.randomUUID())
     }
+    // 返回临时块ID 和 临时文件
     (blockId, getFile(blockId))
   }
 

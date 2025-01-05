@@ -516,6 +516,7 @@ private[spark] class MapOutputTrackerMasterEndpoint(
       logInfoMsg(log"map/merge result", shuffleId, context)
       tracker.post(GetMapAndMergeOutputMessage(shuffleId, context))
 
+    // 获取 shuffle 合并路径请求
     case GetShufflePushMergerLocations(shuffleId: Int) =>
       logInfoMsg(log"shuffle push merger", shuffleId, context)
       tracker.post(GetShufflePushMergersMessage(shuffleId, context))
@@ -554,6 +555,7 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
    */
   protected def askTracker[T: ClassTag](message: Any): T = {
     try {
+      // 追踪器访问消息
       trackerEndpoint.askSync[T](message)
     } catch {
       case e: Exception =>
@@ -791,8 +793,10 @@ private[spark] class MapOutputTrackerMaster(
               case GetMapAndMergeOutputMessage(shuffleId, context) =>
                 handleStatusMessage(shuffleId, context, true)
               case GetShufflePushMergersMessage(shuffleId, context) =>
+                // 获取 shuffle 推送合并的目标地址
                 logDebug(s"Handling request to send shuffle push merger locations for shuffle" +
                   s" $shuffleId to ${context.senderAddress.hostPort}")
+                //
                 context.reply(shuffleStatuses.get(shuffleId).map(_.getShufflePushMergerLocations)
                   .getOrElse(Seq.empty[BlockManagerId]))
             }
@@ -1403,11 +1407,17 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
   override def getShufflePushMergerLocations(shuffleId: Int): Seq[BlockManagerId] = {
     shufflePushMergerLocations.getOrElse(shuffleId, getMergerLocations(shuffleId))
   }
-
+  /**
+   * 获取合并区的目标地址
+   *
+   * @param shuffleId
+   * @return
+   */
   private def getMergerLocations(shuffleId: Int): Seq[BlockManagerId] = {
     fetchingLock.withLock(shuffleId) {
       var fetchedMergers = shufflePushMergerLocations.get(shuffleId).orNull
       if (null == fetchedMergers) {
+        // 根据 shuffleId 获取推送的目标地址, 通过向追踪器发送请求访问推送的目标地址
         fetchedMergers =
           askTracker[Seq[BlockManagerId]](GetShufflePushMergerLocations(shuffleId))
         if (fetchedMergers.nonEmpty) {
@@ -1416,6 +1426,7 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
           fetchedMergers = Seq.empty[BlockManagerId]
         }
       }
+      // 合并
       fetchedMergers
     }
   }

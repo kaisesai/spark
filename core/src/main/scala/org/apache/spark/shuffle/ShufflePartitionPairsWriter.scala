@@ -57,23 +57,31 @@ private[spark] class ShufflePartitionPairsWriter(
       throw SparkException.internalError("Partition pairs writer is already closed.", "SHUFFLE")
     }
     if (objOut == null) {
+      // 初始化流
       open()
     }
+    // 写入 key
     objOut.writeKey(key)
+    // 写入 value
     objOut.writeValue(value)
+    // 写入记录
     recordWritten()
   }
 
   private def open(): Unit = {
     try {
+      // 打开分区流
       partitionStream = partitionWriter.openStream
       timeTrackingStream = new TimeTrackingOutputStream(writeMetrics, partitionStream)
       if (checksum != null) {
         checksumOutputStream = new MutableCheckedOutputStream(timeTrackingStream)
         checksumOutputStream.setChecksum(checksum)
       }
+      // 包装流(压缩流)
       wrappedStream = serializerManager.wrapStream(blockId,
         if (checksumOutputStream != null) checksumOutputStream else timeTrackingStream)
+
+      // 序列化流
       objOut = serializerInstance.serializeStream(wrappedStream)
     } catch {
       case e: Exception =>
@@ -131,9 +139,11 @@ private[spark] class ShufflePartitionPairsWriter(
    */
   private def recordWritten(): Unit = {
     numRecordsWritten += 1
+    // 写入统计
     writeMetrics.incRecordsWritten(1)
 
     if (numRecordsWritten % 16384 == 0) {
+      // 更新写入器
       updateBytesWritten()
     }
   }

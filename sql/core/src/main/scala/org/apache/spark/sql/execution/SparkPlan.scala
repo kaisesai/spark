@@ -184,6 +184,7 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
 
   @transient
   private val executeRDD = LazyTry {
+    // spark执行计划?
     doExecute()
   }
 

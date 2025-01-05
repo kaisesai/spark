@@ -184,7 +184,9 @@ class ExternalAppendOnlyMap[K, V, C](
    * Sort the existing contents of the in-memory map and spill them to a temporary file on disk.
    */
   override protected[this] def spill(collection: SizeTracker): Unit = {
+    // 对数据进行排序, 并返回排序迭代器
     val inMemoryIterator = currentMap.destructiveSortedIterator(keyComparator)
+    // 执行写入
     val diskMapIterator = spillMemoryIteratorToDisk(inMemoryIterator)
     spilledMaps += diskMapIterator
   }
@@ -201,6 +203,7 @@ class ExternalAppendOnlyMap[K, V, C](
       }
       isSpilled
     } else if (currentMap.size > 0) {
+      // 执行溢写
       spill(currentMap)
       currentMap = new SizeTrackingAppendOnlyMap[K, C]
       true
@@ -214,7 +217,10 @@ class ExternalAppendOnlyMap[K, V, C](
    */
   private[this] def spillMemoryIteratorToDisk(inMemoryIterator: Iterator[(K, C)])
       : DiskMapIterator = {
+    // 将内存迭代数据写入磁盘的一个临时的文件
+
     val (blockId, file) = diskBlockManager.createTempLocalBlock()
+    // 磁盘写入器
     val writer = blockManager.getDiskWriter(blockId, file, ser, fileBufferSize, writeMetrics)
     var objectsWritten = 0
 
@@ -231,6 +237,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
     var success = false
     try {
+      // 开始写入磁盘文件
       while (inMemoryIterator.hasNext) {
         val kv = inMemoryIterator.next()
         writer.write(kv._1, kv._2)
@@ -264,7 +271,9 @@ class ExternalAppendOnlyMap[K, V, C](
    * it returns pairs from an on-disk map.
    */
   def destructiveIterator(inMemoryIterator: Iterator[(K, C)]): Iterator[(K, C)] = {
+    // 溢写的迭代器
     readingIterator = new SpillableIterator(inMemoryIterator)
+    // 完成迭代操作
     readingIterator.toCompletionIterator
   }
 
@@ -302,6 +311,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
     // Input streams are derived both from the in-memory map and spilled maps on disk
     // The in-memory map is sorted in place, while the spilled maps are already in sorted order
+    // 排序的map
     private val sortedMap = destructiveIterator(
       currentMap.destructiveSortedIterator(keyComparator))
     private val inputStreams = (Seq(sortedMap) ++ spilledMaps).map(it => it.buffered)
@@ -583,6 +593,7 @@ class ExternalAppendOnlyMap[K, V, C](
     }
 
     def toCompletionIterator: CompletionIterator[(K, C), SpillableIterator] = {
+      // 完成迭代操作
       CompletionIterator[(K, C), SpillableIterator](this, this.destroy())
     }
 

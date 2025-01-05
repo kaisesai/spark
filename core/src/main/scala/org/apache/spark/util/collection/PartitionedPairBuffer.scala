@@ -45,10 +45,13 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
 
   /** Add an element into the buffer */
   def insert(partition: Int, key: K, value: V): Unit = {
+    // 扩容数组
     if (curSize == capacity) {
       growArray()
     }
+    // 放置 分区ID 以及 key
     data(2 * curSize) = (partition, key.asInstanceOf[AnyRef])
+    // 放置 value
     data(2 * curSize + 1) = value.asInstanceOf[AnyRef]
     curSize += 1
     afterUpdate()
@@ -59,6 +62,7 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
     if (capacity >= MAXIMUM_CAPACITY) {
       throw new IllegalStateException(s"Can't insert more than ${MAXIMUM_CAPACITY} elements")
     }
+    // 新容量
     val newCapacity =
       if (capacity * 2 > MAXIMUM_CAPACITY) { // Overflow
         MAXIMUM_CAPACITY
@@ -72,11 +76,20 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
     resetSamples()
   }
 
-  /** Iterate through the data in a given order. For this class this is not really destructive. */
+  /**
+   * Iterate through the data in a given order. For this class this is not really destructive.
+   * <p/>
+   * 将数据按照 key 排序器进行排序, 并返回一个迭代器
+   */
   override def partitionedDestructiveSortedIterator(keyComparator: Option[Comparator[K]])
     : Iterator[((Int, K), V)] = {
+    // 获取分区比较器, 将 key 比较器映射为实际的 分区key比较器,
     val comparator = keyComparator.map(partitionKeyComparator).getOrElse(partitionComparator)
+
+    // 创建一个排序器,对数据 data 进行排序
     new Sorter(new KVArraySortDataFormat[(Int, K), AnyRef]).sort(data, 0, curSize, comparator)
+
+    // 返回一个迭代器
     iterator()
   }
 
@@ -89,6 +102,7 @@ private[spark] class PartitionedPairBuffer[K, V](initialCapacity: Int = 64)
       if (!hasNext) {
         throw new NoSuchElementException
       }
+      // 返回一个 pair, key 以及 value
       val pair = (data(2 * pos).asInstanceOf[(Int, K)], data(2 * pos + 1).asInstanceOf[V])
       pos += 1
       pair

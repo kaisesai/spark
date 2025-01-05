@@ -201,6 +201,7 @@ final class ShuffleInMemorySorter {
       Sorter<PackedRecordPointer, LongArray> sorter =
         new Sorter<>(new ShuffleSortDataFormat(buffer));
 
+      // 对数据进行排序
       sorter.sort(array, 0, pos, SORT_COMPARATOR);
     }
 

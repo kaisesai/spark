@@ -63,6 +63,7 @@ public abstract class MemoryConsumer {
    * Force spill during building.
    */
   public void spill() throws IOException {
+    // 溢写
     spill(Long.MAX_VALUE, this);
   }
 

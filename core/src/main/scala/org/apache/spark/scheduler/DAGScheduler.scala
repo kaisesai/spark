@@ -1567,10 +1567,13 @@ private[spark] class DAGScheduler(
 
   private def configureShufflePushMergerLocations(stage: ShuffleMapStage): Unit = {
     if (stage.shuffleDep.getMergerLocs.nonEmpty) return
+    // shuffle合并的目标地址
     val mergerLocs = sc.schedulerBackend.getShufflePushMergerLocations(
       stage.shuffleDep.partitioner.numPartitions, stage.resourceProfileId)
     if (mergerLocs.nonEmpty) {
+      // stage shuffle 依赖注册地址
       stage.shuffleDep.setMergerLocs(mergerLocs)
+      // 注册 shuffle 推送数据的目标地址, shuffle 依赖的 shuffleId 与地址绑定
       mapOutputTracker.registerShufflePushMergerLocations(stage.shuffleDep.shuffleId, mergerLocs)
       logDebug(s"Shuffle merge locations for shuffle ${stage.shuffleDep.shuffleId} with" +
         s" shuffle merge ${stage.shuffleDep.shuffleMergeId} is" +

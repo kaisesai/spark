@@ -37,6 +37,7 @@ final class ShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, Lo
 
   @Override
   public PackedRecordPointer newKey() {
+    // 打包记录指针
     return new PackedRecordPointer();
   }
 
