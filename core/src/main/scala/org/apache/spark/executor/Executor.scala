@@ -574,8 +574,10 @@ private[spark] class Executor(
       threadId = Thread.currentThread.getId
       Thread.currentThread.setName(threadName)
       val threadMXBean = ManagementFactory.getThreadMXBean
-      // 任务内存管理器
+
+      // 每个线程都会创建一个新的任务内存管理器
       val taskMemoryManager = new TaskMemoryManager(env.memoryManager, taskId)
+
       val deserializeStartTimeNs = System.nanoTime()
       val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
         threadMXBean.getCurrentThreadCpuTime
@@ -609,6 +611,8 @@ private[spark] class Executor(
           taskDescription.serializedTask, Thread.currentThread.getContextClassLoader)
 
         task.localProperties = taskDescription.properties
+
+        // 设置 taskMemoryManager 任务内存管理器
         task.setTaskMemoryManager(taskMemoryManager)
 
         // If this task has been killed before we deserialized it, let's quit now. Otherwise,

@@ -32,10 +32,24 @@ public final class LongArray {
   // This is a long so that we perform long multiplications when computing offsets.
   private static final long WIDTH = 8;
 
+  /**
+   * 页数据
+   */
   private final MemoryBlock memory;
+
+  /**
+   * 基础对象
+   */
   private final Object baseObj;
+
+  /**
+   * 基础偏移量
+   */
   private final long baseOffset;
 
+  /**
+   * 数据长度
+   */
   private final long length;
 
   public LongArray(MemoryBlock memory) {

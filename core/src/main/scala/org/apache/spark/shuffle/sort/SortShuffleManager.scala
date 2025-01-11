@@ -240,12 +240,13 @@ private[spark] object SortShuffleManager extends Logging {
     val shufId = dependency.shuffleId
     val numPartitions = dependency.partitioner.numPartitions
     if (!dependency.serializer.supportsRelocationOfSerializedObjects) {
+      // 不支持重定位序列化对象
       // 不支持迁移序列化对象
       log.debug(s"Can't use serialized shuffle for shuffle $shufId because the serializer, " +
         s"${dependency.serializer.getClass.getName}, does not support object relocation")
       false
     } else if (dependency.mapSideCombine) {
-      // 旁路合并
+      // 不进行 map 端合并
       log.debug(s"Can't use serialized shuffle for shuffle $shufId because we need to do " +
         s"map-side aggregation")
       false
@@ -255,7 +256,7 @@ private[spark] object SortShuffleManager extends Logging {
         s"$MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE partitions")
       false
     } else {
-      // 支持迁移序列化对象 && 不旁路合并 && 分区数 <= 16777215
+      // 支持迁移序列化对象 && 不 map 端合并 && 分区数 <= 16777215
       log.debug(s"Can use serialized shuffle for shuffle $shufId")
       true
     }

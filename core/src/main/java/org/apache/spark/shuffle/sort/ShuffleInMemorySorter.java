@@ -146,6 +146,7 @@ final class ShuffleInMemorySorter {
     if (!hasSpaceForAnotherRecord()) {
       throw new IllegalStateException("There is no space for new record");
     }
+    // 添加一个记录, 在 pos 位置添加一个值
     array.set(pos, PackedRecordPointer.packPointer(recordPointer, partitionId));
     pos++;
   }

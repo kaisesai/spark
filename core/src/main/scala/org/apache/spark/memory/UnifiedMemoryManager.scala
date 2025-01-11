@@ -145,6 +145,7 @@ private[spark] class UnifiedMemoryManager(
       maxMemory - math.min(storagePool.memoryUsed, storageRegionSize)
     }
 
+    // 执行器池获取内存
     executionPool.acquireMemory(
       numBytes, taskAttemptId, maybeGrowExecutionPool, () => computeMaxExecutionPoolSize())
   }

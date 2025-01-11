@@ -70,6 +70,41 @@ final class PackedRecordPointer {
   /**
    * Pack a record address and partition id into a single word.
    *
+   * <p>
+   * 1 long pageNumber = (recordPointer & MASK_LONG_UPPER_13_BITS) >>> 24<br/>
+   * recordPointer=<br/>
+   * 11111111 11111000 00000000 00000000 00000111 11111111 11111111 11111111<br/>
+   * & 高位13<br/>
+   * 11111111 11111000 00000000 00000000 00000000 00000000 00000000 00000000<br/>
+   * =<br/>
+   * 11111111 11111000 00000000 00000000 00000000 00000000 00000000 00000000<br/>
+   * 右移24位 = pageNumber<br/>
+   * 00000000 00000000 00000000 11111111 11111000 00000000 00000000 00000000<br/>
+   * <p/>
+   * 2 long compressedAddress = pageNumber | (recordPointer & MASK_LONG_LOWER_27_BITS)<br/>
+   * (recordPointer & MASK_LONG_LOWER_27_BITS)<br/>
+   * 11111111 11111000 00000000 00000000 00000111 11111111 11111111 11111111<br/>
+   * & MASK_LONG_LOWER_27_BITS<br/>
+   * 00000000 00000000 00000000 00000000 00000111 11111111 11111111 11111111<br/>
+   * =<br/>
+   * 00000000 00000000 00000000 00000000 00000111 11111111 11111111 11111111<br/>
+   * | pageNumber<br/>
+   * 00000000 00000000 00000000 11111111 11111000 00000000 00000000 00000000<br/>
+   * =compressedAddress<br/>
+   * 00000000 00000000 00000000 11111111 11111111 11111111 11111111 11111111<br/>
+   *<p/>
+   * 3 (((long) partitionId) << 40) | compressedAddress;<br/>
+   * (long) int partitionId=<br/>
+   * 00000000 00000000 00000000 00000000 00000000 11111111 11111111 11111111<br/>
+   * (((long) partitionId) << 40)<br/>
+   * =<br/>
+   * 11111111 11111111 11111111 00000000 00000000 00000000 00000000 00000000<br/>
+   * | compressedAddress<br/>
+   * 00000000 00000000 00000000 11111111 11111111 11111111 11111111 11111111<br/>
+   * =<br/>
+   * 11111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111<br/>
+   * <p/>
+   *
    * @param recordPointer a record pointer encoded by TaskMemoryManager.
    * @param partitionId a shuffle partition id (maximum value of 2^24).
    * @return a packed pointer that can be decoded using the {@link PackedRecordPointer} class.
@@ -78,8 +113,11 @@ final class PackedRecordPointer {
     assert (partitionId <= MAXIMUM_PARTITION_ID);
     // Note that without word alignment we can address 2^27 bytes = 128 megabytes per page.
     // Also note that this relies on some internals of how TaskMemoryManager encodes its addresses.
+    //计算 pageNumber,  recordPointer 与 long 高13位按位与, 最后再右移 24 位,  (recordPointer 是由高13为的 pageNumber 和低 51 位的偏移量组成的)
     final long pageNumber = (recordPointer & MASK_LONG_UPPER_13_BITS) >>> 24;
+    // 压缩的地址
     final long compressedAddress = pageNumber | (recordPointer & MASK_LONG_LOWER_27_BITS);
+    // 将 partitionId 左移40位并转成 long类型, 即保留 partitionId 的低24位; 然后再将它与 compressedAddress按位或操作, 这样讲
     return (((long) partitionId) << 40) | compressedAddress;
   }
 

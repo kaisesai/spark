@@ -64,7 +64,7 @@ public class TaskMemoryManager {
   @VisibleForTesting
   static final int OFFSET_BITS = 64 - PAGE_NUMBER_BITS;  // 51
 
-  /** The number of entries in the page table. */
+  /** The number of entries in the page table. 值为 8192 */
   private static final int PAGE_TABLE_SIZE = 1 << PAGE_NUMBER_BITS;
 
   /**
@@ -159,14 +159,18 @@ public class TaskMemoryManager {
    * @return number of bytes successfully granted (<= N).
    */
   public long acquireExecutionMemory(long required, MemoryConsumer requestingConsumer) {
+    // 分配执行的内存
+
     assert(required >= 0);
     assert(requestingConsumer != null);
+    // 模式
     MemoryMode mode = requestingConsumer.getMode();
     // If we are allocating Tungsten pages off-heap and receive a request to allocate on-heap
     // memory here, then it may not make sense to spill since that would only end up freeing
     // off-heap memory. This is subject to change, though, so it may be risky to make this
     // optimization now in case we forget to undo it late when making changes.
     synchronized (this) {
+      // 分配内存
       long got = memoryManager.acquireExecutionMemory(required, taskAttemptId, mode);
 
       // Try to release memory from other consumers first, then we can reduce the frequency of
@@ -275,6 +279,7 @@ public class TaskMemoryManager {
         // newly-freed memory before we have a chance to do so (SPARK-35486). Therefore we may
         // not be able to acquire all the memory that was just spilled. In that case, we will
         // try again in the next loop iteration.
+        // 分配内存
         return memoryManager.acquireExecutionMemory(requested, taskAttemptId, mode);
       } else {
         cList.remove(idx);
@@ -372,12 +377,13 @@ public class TaskMemoryManager {
       throw new TooLargePageException(size);
     }
 
-    // 分配页数据
+    // 分配内存
     long acquired = acquireExecutionMemory(size, consumer);
     if (acquired <= 0) {
       return null;
     }
 
+    // page页最大数为 1 左移 13 位 = 8192
     final int pageNumber;
     synchronized (this) {
       pageNumber = allocatedPages.nextClearBit(0);
@@ -390,6 +396,7 @@ public class TaskMemoryManager {
     }
     MemoryBlock page = null;
     try {
+      // 分配页
       page = memoryManager.tungstenMemoryAllocator().allocate(acquired);
     } catch (OutOfMemoryError e) {
       logger.warn("Failed to allocate a page ({} bytes), try again.",
@@ -403,8 +410,11 @@ public class TaskMemoryManager {
       // this could trigger spilling to free some pages.
       return allocatePage(size, consumer);
     }
+    // 为页设置页号
     page.pageNumber = pageNumber;
+    // 将分配的页放入 pageTable, 最大值为 8192, 即最多放
     pageTable[pageNumber] = page;
+
     if (logger.isTraceEnabled()) {
       logger.trace("Allocate page number {} ({} bytes)", pageNumber, acquired);
     }
@@ -455,12 +465,15 @@ public class TaskMemoryManager {
       // relative to the page's base offset; this relative offset will fit in 51 bits.
       offsetInPage -= page.getBaseOffset();
     }
+    // pageNumber 为当前的 page 号
     return encodePageNumberAndOffset(page.pageNumber, offsetInPage);
   }
 
   @VisibleForTesting
   public static long encodePageNumberAndOffset(int pageNumber, long offsetInPage) {
     assert (pageNumber >= 0) : "encodePageNumberAndOffset called with invalid page";
+    // pageNumber 最大是 1 左移13位 = 8192
+    // 将 pageNumber 左移51位,即保留低13位的数据, offsetInPage 与 long 的低51位值按位与运算, 最后将两者取或运算符, 高13位于低51位拼接起来
     return (((long) pageNumber) << OFFSET_BITS) | (offsetInPage & MASK_LONG_LOWER_51_BITS);
   }
 

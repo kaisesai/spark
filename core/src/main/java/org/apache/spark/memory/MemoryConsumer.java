@@ -30,8 +30,19 @@ import org.apache.spark.unsafe.memory.MemoryBlock;
  */
 public abstract class MemoryConsumer {
 
+  /**
+   * 任务内存管理器, 每个task线程都会创建一个新的实例
+   */
   protected final TaskMemoryManager taskMemoryManager;
+
+  /**
+   * 页大小
+   */
   private final long pageSize;
+
+  /**
+   * 内存模式: 堆内/堆外
+   */
   private final MemoryMode mode;
   protected long used;
 
@@ -94,6 +105,7 @@ public abstract class MemoryConsumer {
    */
   public LongArray allocateArray(long size) {
     long required = size * 8L;
+    // 分配页数据
     MemoryBlock page = taskMemoryManager.allocatePage(required, this);
     if (page == null || page.size() < required) {
       throwOom(page, required);
@@ -115,6 +127,7 @@ public abstract class MemoryConsumer {
    * @throws SparkOutOfMemoryError
    */
   protected MemoryBlock allocatePage(long required) {
+    // 分配页数据, size 为 pageSize 和 required 的最大值
     MemoryBlock page = taskMemoryManager.allocatePage(Math.max(pageSize, required), this);
     if (page == null || page.size() < required) {
       throwOom(page, required);

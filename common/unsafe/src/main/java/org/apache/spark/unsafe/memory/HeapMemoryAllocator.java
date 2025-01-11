@@ -46,11 +46,15 @@ public class HeapMemoryAllocator implements MemoryAllocator {
 
   @Override
   public MemoryBlock allocate(long size) throws OutOfMemoryError {
+    // 分配一个页 MemoryBlock
+    // 单词数
     int numWords = (int) ((size + 7) / 8);
+
     long alignedSize = numWords * 8L;
     assert (alignedSize >= size);
     if (shouldPool(alignedSize)) {
       synchronized (this) {
+        // 分配数量缓冲池
         final LinkedList<WeakReference<long[]>> pool = bufferPoolsBySize.get(alignedSize);
         if (pool != null) {
           while (!pool.isEmpty()) {
@@ -58,6 +62,7 @@ public class HeapMemoryAllocator implements MemoryAllocator {
             final long[] array = arrayReference.get();
             if (array != null) {
               assert (array.length * 8L >= size);
+              // 创建页, offset 为 LONG数组的偏移量
               MemoryBlock memory = new MemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);
               if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {
                 memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_CLEAN_VALUE);
@@ -69,6 +74,7 @@ public class HeapMemoryAllocator implements MemoryAllocator {
         }
       }
     }
+    // 创建一个 long[] 数据, 多少长度的数据
     long[] array = new long[numWords];
     MemoryBlock memory = new MemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);
     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {

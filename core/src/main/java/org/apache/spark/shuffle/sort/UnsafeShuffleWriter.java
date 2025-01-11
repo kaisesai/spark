@@ -102,9 +102,12 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   /** Subclass of ByteArrayOutputStream that exposes `buf` directly. */
   private static final class MyByteArrayOutputStream extends ByteArrayOutputStream {
     MyByteArrayOutputStream(int size) { super(size); }
+
+    // 暴露了 buf 字节数组
     public byte[] getBuf() { return buf; }
   }
 
+  // 字节数组输出流
   private MyByteArrayOutputStream serBuffer;
 
   // 序列化流
@@ -126,13 +129,17 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       SparkConf sparkConf,
       ShuffleWriteMetricsReporter writeMetrics,
       ShuffleExecutorComponents shuffleExecutorComponents) throws SparkException {
+
+    // 分区数
     final int numPartitions = handle.dependency().partitioner().numPartitions();
+
     if (numPartitions > SortShuffleManager.MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE()) {
       throw new IllegalArgumentException(
         "UnsafeShuffleWriter can only be used for shuffles with at most " +
         SortShuffleManager.MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE() +
         " reduce partitions");
     }
+
     this.blockManager = blockManager;
     this.memoryManager = memoryManager;
     this.mapId = mapId;

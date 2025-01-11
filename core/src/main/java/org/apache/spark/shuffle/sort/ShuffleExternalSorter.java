@@ -69,6 +69,10 @@ import org.apache.spark.util.Utils;
  * Unlike {@link org.apache.spark.util.collection.ExternalSorter}, this sorter does not merge its
  * spill files. Instead, this merging is performed in {@link UnsafeShuffleWriter}, which uses a
  * specialized merge procedure that avoids extra serialization/deserialization.
+ *
+ * <p/>
+ *
+ * 使用了一个特殊的合并数据的过程, 避免了不序列化与反序列化
  */
 final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleChecksumSupport {
 
@@ -124,9 +128,12 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
       int numPartitions,
       SparkConf conf,
       ShuffleWriteMetricsReporter writeMetrics) throws SparkException {
+
+    // 调用父类构造器 MemoryConsumer, pageSize
     super(memoryManager,
       (int) Math.min(PackedRecordPointer.MAXIMUM_PAGE_SIZE_BYTES, memoryManager.pageSizeBytes()),
       memoryManager.getTungstenMemoryMode());
+
     this.taskMemoryManager = memoryManager;
     this.blockManager = blockManager;
     this.taskContext = taskContext;
@@ -137,8 +144,11 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
     this.numElementsForSpillThreshold =
         (int) conf.get(package$.MODULE$.SHUFFLE_SPILL_NUM_ELEMENTS_FORCE_SPILL_THRESHOLD());
     this.writeMetrics = writeMetrics;
+
+    // 内存排序器
     this.inMemSorter = new ShuffleInMemorySorter(
       this, initialSize, (boolean) conf.get(package$.MODULE$.SHUFFLE_SORT_USE_RADIXSORT()));
+
     this.peakMemoryUsedBytes = getMemoryUsage();
     this.diskWriteBufferSize =
         (int) (long) conf.get(package$.MODULE$.SHUFFLE_DISK_WRITE_BUFFER_SIZE());
@@ -433,6 +443,7 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
       pageCursor + required > currentPage.getBaseOffset() + currentPage.size() ) {
       // TODO: try to find space in previous pages
       currentPage = allocatePage(required);
+      // 页游标, 页上的偏移量
       pageCursor = currentPage.getBaseOffset();
       allocatedPages.add(currentPage);
     }
@@ -463,15 +474,15 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
     assert(currentPage != null);
     // 页基础数据
     final Object base = currentPage.getBaseObject();
-    // 记录地址
+    // 记录地址, 将当前页和页的游标进行编码计算出记录地址值
     final long recordAddress = taskMemoryManager.encodePageNumberAndOffset(currentPage, pageCursor);
     // 设置数据地址页信息
     UnsafeAlignedOffset.putSize(base, pageCursor, length);
     pageCursor += uaoSize;
-    // 拷贝内存
+    // 拷贝内存 recordBase 是内存缓冲区, base 是基数据(堆外内存时为 null)
     Platform.copyMemory(recordBase, recordOffset, base, pageCursor, length);
     pageCursor += length;
-    // 插入数据
+    // 插入记录地址(页和偏移量)和分区ID
     inMemSorter.insertRecord(recordAddress, partitionId);
   }
 

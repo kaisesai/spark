@@ -110,7 +110,7 @@ private[spark] abstract class Task[T](
       taskAttemptId,
       attemptNumber,
       numPartitions,
-      taskMemoryManager,
+      taskMemoryManager, // 任务内存管理器
       localProperties,
       metricsSystem,
       metrics,
