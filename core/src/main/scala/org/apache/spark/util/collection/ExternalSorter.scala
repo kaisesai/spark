@@ -749,7 +749,7 @@ private[spark] class ExternalSorter[K, V, C](
     context.taskMetrics().incDiskBytesSpilled(diskBytesSpilled)
     context.taskMetrics().incPeakExecutionMemory(peakMemoryUsedBytes)
     // Use completion callback to stop sorter if task was finished/cancelled.
-    context.addTaskCompletionListener[Unit](_ => stop())
+    context.addTaskCompletionListener[Unit](_ => stop());
 
     // 分区迭代排序, 也涉及到合并溢写文件操作
     CompletionIterator[Product2[K, C], Iterator[Product2[K, C]]](iterator, stop())

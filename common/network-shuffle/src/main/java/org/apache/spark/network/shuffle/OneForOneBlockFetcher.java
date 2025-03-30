@@ -90,6 +90,7 @@ public class OneForOneBlockFetcher {
       DownloadFileManager downloadFileManager) {
     this.client = client;
     this.listener = listener;
+    // chunk 回调函数
     this.chunkCallback = new ChunkCallback();
     this.transportConf = transportConf;
     this.downloadFileManager = downloadFileManager;
@@ -97,10 +98,14 @@ public class OneForOneBlockFetcher {
       throw new IllegalArgumentException("Zero-sized blockIds array");
     }
     if (!transportConf.useOldFetchProtocol() && areShuffleBlocksOrChunks(blockIds)) {
+      // 块ID信息
       this.blockIds = new String[blockIds.length];
+      // 块信息
       this.message = createFetchShuffleBlocksOrChunksMsg(appId, execId, blockIds);
     } else {
+      // 块ID信息
       this.blockIds = blockIds;
+      // 块信息
       this.message = new OpenBlocks(appId, execId, blockIds);
     }
   }
@@ -301,10 +306,12 @@ public class OneForOneBlockFetcher {
    * {@link StreamHandle}. We will send all fetch requests immediately, without throttling.
    */
   public void start() {
+    // 发送RPC请求
     client.sendRpc(message.toByteBuffer(), new RpcResponseCallback() {
       @Override
       public void onSuccess(ByteBuffer response) {
         try {
+          // 流处理器
           streamHandle = (StreamHandle) BlockTransferMessage.Decoder.fromByteBuffer(response);
           logger.trace("Successfully opened blocks {}, preparing to fetch chunks.", streamHandle);
 
@@ -312,9 +319,12 @@ public class OneForOneBlockFetcher {
           // reasonable due to higher level chunking in [[ShuffleBlockFetcherIterator]].
           for (int i = 0; i < streamHandle.numChunks; i++) {
             if (downloadFileManager != null) {
+              // 流id获取对应的块信息
               client.stream(OneForOneStreamManager.genStreamChunkId(streamHandle.streamId, i),
+                // 下载回调
                 new DownloadCallback(i));
             } else {
+              // 执行流 chunk
               client.fetchChunk(streamHandle.streamId, i, chunkCallback);
             }
           }
@@ -350,13 +360,16 @@ public class OneForOneBlockFetcher {
     private int chunkIndex;
 
     DownloadCallback(int chunkIndex) throws IOException {
+      // 创建临时文件
       this.targetFile = downloadFileManager.createTempFile(transportConf);
+      // 通道 channel
       this.channel = targetFile.openForWriting();
       this.chunkIndex = chunkIndex;
     }
 
     @Override
     public void onData(String streamId, ByteBuffer buf) throws IOException {
+      // 数据处理
       while (buf.hasRemaining()) {
         channel.write(buf);
       }

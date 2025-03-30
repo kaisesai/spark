@@ -96,6 +96,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
 
   public void addStreamCallback(String streamId, StreamCallback callback) {
     updateTimeOfLastRequest();
+    // 流回调函数注册
     streamCallbacks.offer(ImmutablePair.of(streamId, callback));
   }
 
@@ -165,12 +166,16 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
 
   @Override
   public void handle(ResponseMessage message) throws Exception {
+    // 传输响应处理
+
     if (message instanceof ChunkFetchSuccess resp) {
+      // 块拉取到的处理方式
       ChunkReceivedCallback listener = outstandingFetches.get(resp.streamChunkId);
       if (listener == null) {
         logger.warn("Ignoring response for block {} from {} since it is not outstanding",
           MDC.of(LogKeys.STREAM_CHUNK_ID$.MODULE$, resp.streamChunkId),
           MDC.of(LogKeys.HOST_PORT$.MODULE$, getRemoteAddress(channel)));
+        //
         resp.body().release();
       } else {
         outstandingFetches.remove(resp.streamChunkId);

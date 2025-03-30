@@ -140,7 +140,9 @@ public class TransportClient implements Closeable {
       logger.debug("Sending fetch chunk request {} to {}", chunkIndex, getRemoteAddress(channel));
     }
 
+    // 流id
     StreamChunkId streamChunkId = new StreamChunkId(streamId, chunkIndex);
+    // 监听器
     StdChannelListener listener = new StdChannelListener(streamChunkId) {
       @Override
       void handleFailure(String errorMsg, Throwable cause) {
@@ -149,7 +151,7 @@ public class TransportClient implements Closeable {
       }
     };
     handler.addFetchRequest(streamChunkId, callback);
-
+    // 写入数据
     channel.writeAndFlush(new ChunkFetchRequest(streamChunkId)).addListener(listener);
   }
 
@@ -160,6 +162,7 @@ public class TransportClient implements Closeable {
    * @param callback Object to call with the stream data.
    */
   public void stream(String streamId, StreamCallback callback) {
+    // 标准 channel 监听器
     StdChannelListener listener = new StdChannelListener(streamId) {
       @Override
       void handleFailure(String errorMsg, Throwable cause) throws Exception {
@@ -173,8 +176,11 @@ public class TransportClient implements Closeable {
     // Need to synchronize here so that the callback is added to the queue and the RPC is
     // written to the socket atomically, so that callbacks are called in the right order
     // when responses arrive.
+    // 同步执行
     synchronized (this) {
+      // 添加回调函数
       handler.addStreamCallback(streamId, callback);
+      // 发送请求,并添加监听器处理结果
       channel.writeAndFlush(new StreamRequest(streamId)).addListener(listener);
     }
   }
@@ -195,7 +201,9 @@ public class TransportClient implements Closeable {
     long requestId = requestId();
     handler.addRpcRequest(requestId, callback);
 
+    // 发送请求
     RpcChannelListener listener = new RpcChannelListener(requestId, callback);
+    // 写入数据
     channel.writeAndFlush(new RpcRequest(requestId, new NioManagedBuffer(message)))
       .addListener(listener);
 
@@ -224,8 +232,11 @@ public class TransportClient implements Closeable {
       logger.trace(
         "Sending RPC {} to fetch merged block meta to {}", requestId, getRemoteAddress(channel));
     }
+    // 发送请求
     handler.addRpcRequest(requestId, callback);
+    // 监听器
     RpcChannelListener listener = new RpcChannelListener(requestId, callback);
+    // 写入并刷新
     channel.writeAndFlush(
       new MergedBlockMetaRequest(requestId, appId, shuffleId, shuffleMergeId,
         reduceId)).addListener(listener);

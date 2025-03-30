@@ -49,6 +49,7 @@ public class MemoryLocation {
   }
 
   public final long getBaseOffset() {
+    // 偏移量
     return offset;
   }
 }

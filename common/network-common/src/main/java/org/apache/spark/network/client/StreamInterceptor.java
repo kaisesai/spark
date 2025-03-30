@@ -76,6 +76,7 @@ public class StreamInterceptor<T extends Message> implements TransportFrameDecod
     ByteBuffer nioBuffer = buf.readSlice(toRead).nioBuffer();
 
     int available = nioBuffer.remaining();
+    // 流迭代器
     callback.onData(streamId, nioBuffer);
     bytesRead += available;
     if (bytesRead > byteCount) {

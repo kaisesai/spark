@@ -136,7 +136,9 @@ private[spark] class NettyBlockTransferService(
           assert(listener.isInstanceOf[BlockFetchingListener],
             s"Expecting a BlockFetchingListener, but got ${listener.getClass}")
           try {
-            val client = clientFactory.createClient(host, port, maxRetries > 0)
+            // 客户端
+            val client = clientFactory.createClient(host, port, maxRetries > 0);
+            // 一对一块提取器启动
             new OneForOneBlockFetcher(client, appId, execId, blockIds,
               listener.asInstanceOf[BlockFetchingListener], transportConf, tempFileManager).start()
           } catch {
@@ -158,6 +160,7 @@ private[spark] class NettyBlockTransferService(
         // a bug in this code. We should remove the if statement once we're sure of the stability.
         new RetryingBlockTransferor(transportConf, blockFetchStarter, blockIds, listener).start()
       } else {
+        // 拉取块,并监听处理
         blockFetchStarter.createAndStart(blockIds, listener)
       }
     } catch {

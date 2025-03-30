@@ -190,6 +190,7 @@ private class PushBasedFetchHelper(
           PushMergedRemoteMetaFailedFetchResult(shuffleId, shuffleMergeId, reduceId, address))
       }
     }
+
     req.blocks.foreach { block =>
       val shuffleBlockId = block.blockId.asInstanceOf[ShuffleMergedBlockId]
       shuffleClient.getMergedBlockMeta(address.host, address.port, shuffleBlockId.shuffleId,
@@ -205,6 +206,7 @@ private class PushBasedFetchHelper(
   def fetchAllPushMergedLocalBlocks(
       pushMergedLocalBlocks: mutable.LinkedHashSet[BlockId]): Unit = {
     if (pushMergedLocalBlocks.nonEmpty) {
+      // 推送的本地块
       blockManager.hostLocalDirManager.foreach(fetchPushMergedLocalBlocks(_, pushMergedLocalBlocks))
     }
   }

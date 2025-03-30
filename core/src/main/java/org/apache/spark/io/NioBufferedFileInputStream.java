@@ -48,9 +48,12 @@ public final class NioBufferedFileInputStream extends InputStream {
   private final FileChannel fileChannel;
 
   public NioBufferedFileInputStream(File file, int bufferSizeInBytes) throws IOException {
+    // 分配直接内存缓存
     byteBuffer = Platform.allocateDirectBuffer(bufferSizeInBytes);
+    // 打开文件流
     fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.READ);
     byteBuffer.flip();
+    // 清理
     this.cleanable = CLEANER.register(this, new ResourceCleaner(fileChannel, byteBuffer));
   }
 

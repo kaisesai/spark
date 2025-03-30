@@ -116,6 +116,7 @@ private[spark] class DiskStore(
   }
 
   def getBytes(blockId: BlockId): BlockData = {
+    // 获取文件,转成 bytes
     getBytes(diskManager.getFile(blockId.name), getSize(blockId))
   }
 

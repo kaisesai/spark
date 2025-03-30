@@ -23,6 +23,10 @@ import org.apache.spark._
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.serializer.Serializer
 
+/**
+ * shuffle RDD
+ * @param idx
+ */
 private[spark] class ShuffledRDDPartition(val idx: Int) extends Partition {
   override val index: Int = idx
 }
@@ -111,7 +115,8 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     val metrics = context.taskMetrics().createTempShuffleReadMetrics()
     // 获取 shuffle reader
     SparkEnv.get.shuffleManager.getReader(
-      dep.shuffleHandle, split.index, split.index + 1, context, metrics)
+      dep.shuffleHandle, split.index, split.index + 1, context, metrics
+      )
       // 执行读取
       .read()
       .asInstanceOf[Iterator[(K, C)]]

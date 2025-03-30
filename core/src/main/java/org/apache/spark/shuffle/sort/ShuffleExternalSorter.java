@@ -141,6 +141,8 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
     // Use getSizeAsKb (not bytes) to maintain backwards compatibility if no units are provided
     this.fileBufferSizeBytes =
         (int) (long) conf.get(package$.MODULE$.SHUFFLE_FILE_BUFFER_SIZE()) * 1024;
+
+    // 数据溢写阈值
     this.numElementsForSpillThreshold =
         (int) conf.get(package$.MODULE$.SHUFFLE_SPILL_NUM_ELEMENTS_FORCE_SPILL_THRESHOLD());
     this.writeMetrics = writeMetrics;
@@ -403,7 +405,9 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
   private void growPointerArrayIfNecessary() throws IOException {
     assert(inMemSorter != null);
     if (!inMemSorter.hasSpaceForAnotherRecord()) {
+      // 内存使用量
       long used = inMemSorter.getMemoryUsage();
+      // 分配数组
       LongArray array;
       try {
         // could trigger spilling
@@ -441,10 +445,12 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
   private void acquireNewPageIfNecessary(int required) {
     if (currentPage == null ||
       pageCursor + required > currentPage.getBaseOffset() + currentPage.size() ) {
+      // 分配数据页
       // TODO: try to find space in previous pages
       currentPage = allocatePage(required);
       // 页游标, 页上的偏移量
       pageCursor = currentPage.getBaseOffset();
+      // 添加页信息
       allocatedPages.add(currentPage);
     }
   }
@@ -464,23 +470,29 @@ final class ShuffleExternalSorter extends MemoryConsumer implements ShuffleCheck
       spill();
     }
 
+    // 扩容: 增加指针数组
     growPointerArrayIfNecessary();
     final int uaoSize = UnsafeAlignedOffset.getUaoSize();
+    // 比如 length 10byte + uaoSize 字节
     // Need 4 or 8 bytes to store the record length.
     final int required = length + uaoSize;
-    // 获取新的页数据
+    // 获取新的页数据, 一定字节大小的内存区域, 称为 页, 比如 100字节
     acquireNewPageIfNecessary(required);
 
     assert(currentPage != null);
-    // 页基础数据
+    // 页基础数据 (这里的 base 在堆内上使用的是 long[], 将它想象为连续的 8字节的内存区域, long[10] 就表示 16 + 10 * 8 = 96 byte 的内存空间,我们操作的是内存空间,而不是 long 表示的10进制数的值,不能混淆了!)
+    // 不能将 long[] 作为Java中打印 long[1] 获取十进制数来看待,而应该是一个连续的内存空间二进制内存空间,不能通过打印来看,因为它都是字节流数据
     final Object base = currentPage.getBaseObject();
     // 记录地址, 将当前页和页的游标进行编码计算出记录地址值
     final long recordAddress = taskMemoryManager.encodePageNumberAndOffset(currentPage, pageCursor);
-    // 设置数据地址页信息
+    // 注意 length 是一个 int 类型值, 占据4个字节,
+    // 设置数据地址页信息, 在游标(地址)处 put 长度值, 4或者8个字节长度.
     UnsafeAlignedOffset.putSize(base, pageCursor, length);
+    // 更新地址值, 加4/8字节
     pageCursor += uaoSize;
     // 拷贝内存 recordBase 是内存缓冲区, base 是基数据(堆外内存时为 null)
     Platform.copyMemory(recordBase, recordOffset, base, pageCursor, length);
+    // 更新地址值, 加 length 个字节
     pageCursor += length;
     // 插入记录地址(页和偏移量)和分区ID
     inMemSorter.insertRecord(recordAddress, partitionId);

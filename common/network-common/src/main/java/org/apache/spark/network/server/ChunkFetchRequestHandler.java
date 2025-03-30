@@ -86,6 +86,7 @@ public class ChunkFetchRequestHandler extends SimpleChannelInboundHandler<ChunkF
     processFetchRequest(channel, msg);
   }
 
+  // 处理块拉取请求
   public void processFetchRequest(
       final Channel channel, final ChunkFetchRequest msg) throws Exception {
     if (logger.isTraceEnabled()) {
@@ -104,7 +105,9 @@ public class ChunkFetchRequestHandler extends SimpleChannelInboundHandler<ChunkF
     }
     ManagedBuffer buf;
     try {
+      // 获取 块 信息
       streamManager.checkAuthorization(client, msg.streamChunkId.streamId());
+      // 实际的获取块
       buf = streamManager.getChunk(msg.streamChunkId.streamId(), msg.streamChunkId.chunkIndex());
       if (buf == null) {
         throw new IllegalStateException("Chunk was not found");
@@ -119,7 +122,10 @@ public class ChunkFetchRequestHandler extends SimpleChannelInboundHandler<ChunkF
     }
 
     streamManager.chunkBeingSent(msg.streamChunkId.streamId());
-    respond(channel, new ChunkFetchSuccess(msg.streamChunkId, buf)).addListener(
+    // 响应数据
+    respond(channel, new ChunkFetchSuccess(msg.streamChunkId, buf))
+            // 添加监听器
+            .addListener(
       (ChannelFutureListener) future -> streamManager.chunkSent(msg.streamChunkId.streamId()));
   }
 
@@ -143,10 +149,12 @@ public class ChunkFetchRequestHandler extends SimpleChannelInboundHandler<ChunkF
     final SocketAddress remoteAddress = channel.remoteAddress();
     ChannelFuture channelFuture;
     if (syncModeEnabled) {
+      // 发送数据
       channelFuture = channel.writeAndFlush(result).await();
     } else {
       channelFuture = channel.writeAndFlush(result);
     }
+    // 添加监听器
     return channelFuture.addListener((ChannelFutureListener) future -> {
       if (future.isSuccess()) {
         logger.trace("Sent result {} to client {}", result, remoteAddress);

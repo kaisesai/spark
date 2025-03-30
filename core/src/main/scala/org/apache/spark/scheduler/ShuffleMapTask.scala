@@ -105,7 +105,7 @@ private[spark] class ShuffleMapTask(
     } else {
       context.taskAttemptId()
     }
-    // 使用 shuffle 进行 write 操作
+    // 使用 shuffle 进行 write 操作, 获取RDD的迭代器
     dep.shuffleWriterProcessor.write(
           rdd.iterator(partition, context),
           dep,

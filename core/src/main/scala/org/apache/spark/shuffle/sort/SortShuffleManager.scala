@@ -92,6 +92,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
 
   /**
    * Obtains a [[ShuffleHandle]] to pass to tasks.
+   *
+   * 注册一个 shuffle
    */
   override def registerShuffle[K, V, C](
       shuffleId: Int,
@@ -135,9 +137,14 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       endPartition: Int,
       context: TaskContext,
       metrics: ShuffleReadMetricsReporter): ShuffleReader[K, C] = {
+
+    // shuffle处理器
     val baseShuffleHandle = handle.asInstanceOf[BaseShuffleHandle[K, _, C]]
+
+    // 块的地址,以及是否允许批量抽取开关
     val (blocksByAddress, canEnableBatchFetch) =
       if (baseShuffleHandle.dependency.isShuffleMergeFinalizedMarked) {
+        // 获取推送 shuffle map 大小
         val res = SparkEnv.get.mapOutputTracker.getPushBasedShuffleMapSizesByExecutorId(
           handle.shuffleId, startMapIndex, endMapIndex, startPartition, endPartition)
         (res.iter, res.enableBatchFetch)
@@ -146,6 +153,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           handle.shuffleId, startMapIndex, endMapIndex, startPartition, endPartition)
         (address, true)
       }
+
+    // 块存储shuffle读取器
     new BlockStoreShuffleReader(
       handle.asInstanceOf[BaseShuffleHandle[K, _, C]], blocksByAddress, context, metrics,
       shouldBatchFetch =

@@ -461,7 +461,7 @@ object SparkEnv extends Logging {
       conf,
       isDriver)
 
-    // 块传输服务
+    // 块传输服务,  NettyBlockTransferService
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, serializerManager, bindAddress,
         advertiseAddress, blockManagerPort, numUsableCores, blockManagerMaster.driverEndpoint)

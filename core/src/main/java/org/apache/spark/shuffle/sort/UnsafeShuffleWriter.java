@@ -198,6 +198,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         // 插入记录并排序
         insertRecordIntoSorter(records.next());
       }
+      // 关闭并输出
       closeAndWriteOutput();
       success = true;
     } finally {
@@ -221,7 +222,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   private void open() throws SparkException {
     assert (sorter == null);
-    // shuffle 排序器
+    // shuffle 扩展排序器
     sorter = new ShuffleExternalSorter(
       memoryManager,
       blockManager,
@@ -230,7 +231,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       partitioner.numPartitions(),
       sparkConf,
       writeMetrics);
-    // 缓存区
+    // 字节输出流-缓存区
     serBuffer = new MyByteArrayOutputStream(DEFAULT_INITIAL_SER_BUFFER_SIZE);
     // 序列化输出流
     serOutputStream = serializer.serializeStream(serBuffer);
@@ -238,6 +239,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   @VisibleForTesting
   void closeAndWriteOutput() throws IOException {
+    // 关闭并合并文件
     assert(sorter != null);
     updatePeakMemoryUsed();
     serBuffer = null;
@@ -272,10 +274,11 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     serOutputStream.writeValue(record._2(), OBJECT_CLASS_TAG);
     serOutputStream.flush();
 
+    // 记录的字节大小, 比如 10byte
     final int serializedRecordSize = serBuffer.size();
     assert (serializedRecordSize > 0);
 
-    // 将序列化流中的数据写入到排序器
+    // 将序列化流中的数据写入到排序器, 字节数组, 偏移量, 数据大小字节
     sorter.insertRecord(
       serBuffer.getBuf(), Platform.BYTE_ARRAY_OFFSET, serializedRecordSize, partitionId);
   }
@@ -317,6 +320,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         partitionLengths = mergeSpillsUsingStandardWriter(spills);
       }
     } else {
+      // 合并溢写文件
       partitionLengths = mergeSpillsUsingStandardWriter(spills);
     }
     return partitionLengths;
@@ -360,6 +364,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         }
       } else {
         logger.debug("Using slow merge");
+        // 使用文件系统合并溢写文件
         mergeSpillsWithFileStream(spills, mapWriter, compressionCodec);
       }
       // 提交所有分区
@@ -400,9 +405,11 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     final int numPartitions = partitioner.numPartitions();
     final InputStream[] spillInputStreams = new InputStream[spills.length];
 
+    // 使用Java文件流写入溢写文件
     boolean threwException = true;
     try {
       for (int i = 0; i < spills.length; i++) {
+        // 每个溢写文件分配一个NIO缓存文件输入流
         spillInputStreams[i] = new NioBufferedFileInputStream(
           spills[i].file,
           mergeBufferSizeInBytes);
@@ -412,9 +419,13 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
               Arrays.toString(spills[i].partitionLengths));
         }
       }
+
       for (int partition = 0; partition < numPartitions; partition++) {
         boolean copyThrewException = true;
+        // 每个分区一个书写器
         ShufflePartitionWriter writer = mapWriter.getPartitionWriter(partition);
+
+        // 输出流
         OutputStream partitionOutput = writer.openStream();
         try {
           partitionOutput = new TimeTrackingOutputStream(writeMetrics, partitionOutput);
@@ -422,6 +433,8 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
           if (compressionCodec != null) {
             partitionOutput = compressionCodec.compressedOutputStream(partitionOutput);
           }
+
+          // 溢写文件
           for (int i = 0; i < spills.length; i++) {
             final long partitionLengthInSpill = spills[i].partitionLengths[partition];
 
@@ -429,6 +442,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
               InputStream partitionInputStream = null;
               boolean copySpillThrewException = true;
               try {
+                // 分区输入流
                 partitionInputStream = new LimitedInputStream(spillInputStreams[i],
                     partitionLengthInSpill, false);
                 partitionInputStream = blockManager.serializerManager().wrapForEncryption(
@@ -437,6 +451,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
                   partitionInputStream = compressionCodec.compressedInputStream(
                       partitionInputStream);
                 }
+                // 拷贝数据, 从分区输入流读取到分区输出流
                 ByteStreams.copy(partitionInputStream, partitionOutput);
                 copySpillThrewException = false;
               } finally {

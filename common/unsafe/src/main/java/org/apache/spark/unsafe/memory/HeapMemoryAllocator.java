@@ -46,8 +46,10 @@ public class HeapMemoryAllocator implements MemoryAllocator {
 
   @Override
   public MemoryBlock allocate(long size) throws OutOfMemoryError {
+    // 堆内内存的分配
     // 分配一个页 MemoryBlock
-    // 单词数
+    // size 表示多少字节, numberWords 表示多少内存数量, size 为1 时, numWords 为 1, 当 size 为 8 时, numWords 也为 1(因为小数点去除)
+    // 利用的是数据类型取整的技巧
     int numWords = (int) ((size + 7) / 8);
 
     long alignedSize = numWords * 8L;
@@ -74,8 +76,9 @@ public class HeapMemoryAllocator implements MemoryAllocator {
         }
       }
     }
-    // 创建一个 long[] 数据, 多少长度的数据
+    // 创建一个 long[] 数据, 多少长度的数据, 创建出来的数组就已经分配了大小, long 类型是8个字节, 一共分配 size
     long[] array = new long[numWords];
+    // 指定一个基础对象, 指定对象的其实位置, 大小
     MemoryBlock memory = new MemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);
     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {
       memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_CLEAN_VALUE);

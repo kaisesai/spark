@@ -72,6 +72,7 @@ public class OneForOneStreamManager extends StreamManager {
         Channel channel,
         boolean isBufferMaterializedOnNext) {
       this.appId = appId;
+      // 迭代器缓存信息
       this.buffers = Preconditions.checkNotNull(buffers);
       this.associatedChannel = channel;
       this.isBufferMaterializedOnNext = isBufferMaterializedOnNext;
@@ -87,6 +88,7 @@ public class OneForOneStreamManager extends StreamManager {
 
   @Override
   public ManagedBuffer getChunk(long streamId, int chunkIndex) {
+    // 根据流id获取 块信息流状态信息(迭代器)
     StreamState state = streams.get(streamId);
     if (state == null) {
       throw new IllegalStateException(String.format(
@@ -99,6 +101,7 @@ public class OneForOneStreamManager extends StreamManager {
         "Requested chunk index beyond end %s", chunkIndex));
     }
     state.curChunk += 1;
+    // 缓存, 通过迭代器获取块信息
     ManagedBuffer nextChunk = state.buffers.next();
 
     if (!state.buffers.hasNext()) {
@@ -236,6 +239,7 @@ public class OneForOneStreamManager extends StreamManager {
       Channel channel,
       boolean isBufferMaterializedOnNext) {
     long myStreamId = nextStreamId.getAndIncrement();
+    // 注册流处理器
     streams.put(myStreamId, new StreamState(appId, buffers, channel, isBufferMaterializedOnNext));
     return myStreamId;
   }

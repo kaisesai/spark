@@ -76,19 +76,26 @@ class NettyBlockRpcServer(
     logTrace(s"Received request: $message")
 
     message match {
+      // 消息类型
       case openBlocks: OpenBlocks =>
-        val blocksNum = openBlocks.blockIds.length
+        // 打开的块信息
+        val blocksNum = openBlocks.blockIds.length;
+        // 获取出块信息
         val blocks = (0 until blocksNum).map { i =>
           val blockId = BlockId.apply(openBlocks.blockIds(i))
           assert(!blockId.isInstanceOf[ShuffleBlockBatchId],
-            "Continuous shuffle block fetching only works for new fetch protocol.")
-          blockManager.getLocalBlockData(blockId)
-        }
+            "Continuous shuffle block fetching only works for new fetch protocol.");
+          // 根据 blockId 读取 block 块信息
+          blockManager.getLocalBlockData(blockId);
+        };
+        // 注册一个流, 将 block块信息迭代器放入其中
         val streamId = streamManager.registerStream(appId, blocks.iterator.asJava,
-          client.getChannel)
-        logTrace(s"Registered streamId $streamId with $blocksNum buffers")
-        responseContext.onSuccess(new StreamHandle(streamId, blocksNum).toByteBuffer)
+          client.getChannel);
+        logTrace(s"Registered streamId $streamId with $blocksNum buffers");
+        // 给一个流处理器
+        responseContext.onSuccess(new StreamHandle(streamId, blocksNum).toByteBuffer);
 
+      // 块信息 FetchShuffleBlocks
       case fetchShuffleBlocks: FetchShuffleBlocks =>
         val blocks = fetchShuffleBlocks.mapIds.zipWithIndex.flatMap { case (mapId, index) =>
           if (!fetchShuffleBlocks.batchFetchEnabled) {
@@ -120,6 +127,7 @@ class NettyBlockRpcServer(
         responseContext.onSuccess(
           new StreamHandle(streamId, numBlockIds).toByteBuffer)
 
+      // 块信息 UploadBlock
       case uploadBlock: UploadBlock =>
         // StorageLevel and ClassTag are serialized as bytes using our JavaSerializer.
         val (level, classTag) = deserializeMetadata(uploadBlock.metadata)

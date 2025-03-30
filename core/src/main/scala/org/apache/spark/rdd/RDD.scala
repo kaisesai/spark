@@ -333,8 +333,10 @@ abstract class RDD[T: ClassTag](
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
     if (storageLevel != StorageLevel.NONE) {
+      // 获取或计算
       getOrCompute(split, context)
     } else {
+      // 计算, 获取迭代器
       computeOrReadCheckpoint(split, context)
     }
   }
@@ -371,6 +373,7 @@ abstract class RDD[T: ClassTag](
     if (isCheckpointedAndMaterialized) {
       firstParent[T].iterator(split, context)
     } else {
+      // 计算RDD
       compute(split, context)
     }
   }
@@ -385,6 +388,7 @@ abstract class RDD[T: ClassTag](
     SparkEnv.get.blockManager.getOrElseUpdateRDDBlock(
       context.taskAttemptId(), blockId, storageLevel, elementClassTag, () => {
         readCachedBlock = false
+        // 计算
         computeOrReadCheckpoint(partition, context)
       }
     ) match {

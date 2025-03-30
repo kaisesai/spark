@@ -30,26 +30,32 @@ import org.apache.spark.util.collection.ExternalAppendOnlyMap
  */
 @DeveloperApi
 case class Aggregator[K, V, C] (
-    createCombiner: V => C,
-    mergeValue: (C, V) => C,
-    mergeCombiners: (C, C) => C) {
+    createCombiner: V => C, // 创建联合器
+    mergeValue: (C, V) => C, // 合并数据
+    mergeCombiners: (C, C) => C) { // 合并多个合并器结果
 
   def combineValuesByKey(
       iter: Iterator[_ <: Product2[K, V]],
       context: TaskContext): Iterator[(K, C)] = {
-    val combiners = new ExternalAppendOnlyMap[K, V, C](createCombiner, mergeValue, mergeCombiners)
-    combiners.insertAll(iter)
-    updateMetrics(context, combiners)
-    combiners.iterator
+    // 联合器
+    val combiners = new ExternalAppendOnlyMap[K, V, C](createCombiner, mergeValue, mergeCombiners);
+    // 插入迭代器
+    combiners.insertAll(iter);
+    updateMetrics(context, combiners);
+    // 返回迭代器
+    combiners.iterator;
   }
 
   def combineCombinersByKey(
       iter: Iterator[_ <: Product2[K, C]],
       context: TaskContext): Iterator[(K, C)] = {
-    val combiners = new ExternalAppendOnlyMap[K, C, C](identity, mergeCombiners, mergeCombiners)
-    combiners.insertAll(iter)
-    updateMetrics(context, combiners)
-    combiners.iterator
+    // 合并器
+    val combiners = new ExternalAppendOnlyMap[K, C, C](identity, mergeCombiners, mergeCombiners);
+    // 合并器添加迭代器
+    combiners.insertAll(iter);
+    updateMetrics(context, combiners);
+    // 最后返回合并器的迭代器
+    combiners.iterator;
   }
 
   /** Update task metrics after populating the external map. */

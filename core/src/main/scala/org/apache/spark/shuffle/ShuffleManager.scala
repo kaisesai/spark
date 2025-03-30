@@ -64,6 +64,7 @@ private[spark] trait ShuffleManager {
       endPartition: Int,
       context: TaskContext,
       metrics: ShuffleReadMetricsReporter): ShuffleReader[K, C] = {
+    // 返回一个 reader
     getReader(handle, 0, Int.MaxValue, startPartition, endPartition, context, metrics)
   }
 
@@ -74,6 +75,8 @@ private[spark] trait ShuffleManager {
    * outputs of the shuffle in `getMapSizesByExecutorId`.
    *
    * Called on executors by reduce tasks.
+   *
+   * 获取shuffle 读取器
    */
   def getReader[K, C](
       handle: ShuffleHandle,

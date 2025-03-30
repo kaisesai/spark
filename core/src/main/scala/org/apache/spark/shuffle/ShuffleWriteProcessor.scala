@@ -73,7 +73,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
           val mergerLocs =
             mapOutputTracker.getShufflePushMergerLocations(dep.shuffleId)
           if (mergerLocs.nonEmpty) {
-            // 允许合并
+            // 合并文件的地址
             dep.setMergerLocs(mergerLocs)
           }
         }
@@ -84,6 +84,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
         if (!dep.shuffleMergeFinalized) {
           // 块解析器处理
           manager.shuffleBlockResolver match {
+            // 索引 shuffle 块解析器
             case resolver: IndexShuffleBlockResolver =>
               logInfo(log"Shuffle merge enabled with" +
                 log" ${MDC(NUM_MERGER_LOCATIONS, dep.getMergerLocs.size)} merger locations" +
@@ -99,6 +100,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
           }
         }
       }
+      // 获取状态
       mapStatus.get
     } catch {
       case e: Exception =>

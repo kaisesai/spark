@@ -181,6 +181,7 @@ public final class Platform {
   }
 
   public static long allocateMemory(long size) {
+    // 使用 unsafe 分配内存, 直接分享
     return _UNSAFE.allocateMemory(size);
   }
 

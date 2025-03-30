@@ -62,6 +62,8 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
   /**
    * Creates an external shuffle client, with SASL optionally enabled. If SASL is not enabled,
    * then secretKeyHolder may be null.
+   *
+   * 外部的块存储客户端
    */
   public ExternalBlockStoreClient(
       TransportConf conf,
@@ -80,12 +82,15 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
    */
   public void init(String appId) {
     this.appId = appId;
+    // 传输上下文
     TransportContext context = new TransportContext(
       transportConf, new NoOpRpcHandler(), true, true);
+    // 启动器
     List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
     if (authEnabled) {
       bootstraps.add(new AuthClientBootstrap(transportConf, appId, secretKeyHolder));
     }
+    // 创建客户端工厂
     clientFactory = context.createClientFactory(bootstraps);
   }
 
@@ -110,6 +115,7 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
     }
   }
 
+  // 提取块信息
   @Override
   public void fetchBlocks(
       String host,
@@ -122,6 +128,7 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
     logger.debug("External shuffle fetch from {}:{} (executor id {})", host, port, execId);
     try {
       int maxRetries = transportConf.maxIORetries();
+      // 块传输启动器
       RetryingBlockTransferor.BlockTransferStarter blockFetchStarter =
           (inputBlockId, inputListener) -> {
             // Unless this client is closed.
@@ -129,6 +136,7 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
               assert inputListener instanceof BlockFetchingListener :
                 "Expecting a BlockFetchingListener, but got " + inputListener.getClass();
               TransportClient client = clientFactory.createClient(host, port, maxRetries > 0);
+              // 一对一块提取器, 启动
               new OneForOneBlockFetcher(client, appId, execId, inputBlockId,
                 (BlockFetchingListener) inputListener, transportConf, downloadFileManager).start();
             } else {
@@ -243,6 +251,8 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
       + " reduceId {}", host, port, shuffleId, shuffleMergeId, reduceId);
     try {
       TransportClient client = clientFactory.createClient(host, port);
+
+      // 发送请求
       client.sendMergedBlockMetaReq(appId, shuffleId, shuffleMergeId, reduceId,
         new MergedBlockMetaResponseCallback() {
           @Override

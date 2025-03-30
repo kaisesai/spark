@@ -27,6 +27,7 @@ public class NoOpRpcHandler extends RpcHandler {
   private final StreamManager streamManager;
 
   public NoOpRpcHandler() {
+    // 一对一流管理器
     streamManager = new OneForOneStreamManager();
   }
 

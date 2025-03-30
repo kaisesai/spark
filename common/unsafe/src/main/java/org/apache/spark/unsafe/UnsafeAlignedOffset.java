@@ -53,7 +53,9 @@ public class UnsafeAlignedOffset {
 
   public static void putSize(Object object, long offset, int value) {
     switch (getUaoSize()) {
+      // 4 字节, 在 offset 位置处, 设置一个4字节的 value 值
       case 4 -> Platform.putInt(object, offset, value);
+      // 8 字节, 在 offset 位置处, 设置一个8字节的 value 值
       case 8 -> Platform.putLong(object, offset, value);
       default ->
         // checkstyle.off: RegexpSinglelineJava

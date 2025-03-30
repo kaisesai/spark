@@ -91,7 +91,7 @@ private[spark] class ResultTask[T, U](
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
 
-    // 执行函数
+    // 执行函数, 获取RDD 的迭代器
     func(context, rdd.iterator(partition, context))
   }
 

@@ -377,7 +377,7 @@ public class TaskMemoryManager {
       throw new TooLargePageException(size);
     }
 
-    // 分配内存
+    // 分配内存, 分配多少字节
     long acquired = acquireExecutionMemory(size, consumer);
     if (acquired <= 0) {
       return null;
@@ -386,6 +386,7 @@ public class TaskMemoryManager {
     // page页最大数为 1 左移 13 位 = 8192
     final int pageNumber;
     synchronized (this) {
+      // 获取页号
       pageNumber = allocatedPages.nextClearBit(0);
       if (pageNumber >= PAGE_TABLE_SIZE) {
         releaseExecutionMemory(acquired, consumer);

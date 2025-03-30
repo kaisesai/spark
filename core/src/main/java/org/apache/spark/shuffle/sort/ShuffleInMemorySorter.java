@@ -72,6 +72,7 @@ final class ShuffleInMemorySorter {
     assert (initialSize > 0);
     this.initialSize = initialSize;
     this.useRadixSort = useRadixSort;
+    // 分配数组
     this.array = consumer.allocateArray(initialSize);
     this.usableCapacity = getUsableCapacity();
   }
@@ -119,8 +120,10 @@ final class ShuffleInMemorySorter {
       newArray.getBaseOffset(),
       pos * 8L
     );
+    // 释放内存块
     consumer.freeArray(array);
     array = newArray;
+    // 获取已使用的容量
     usableCapacity = getUsableCapacity();
   }
 

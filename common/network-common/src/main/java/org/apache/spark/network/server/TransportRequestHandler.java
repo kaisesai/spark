@@ -105,9 +105,13 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
   @Override
   public void handle(RequestMessage request) throws Exception {
+    // 处理 netty 请求
+
     if (request instanceof ChunkFetchRequest chunkFetchRequest) {
+      // 处理 块拉取请求
       chunkFetchRequestHandler.processFetchRequest(channel, chunkFetchRequest);
     } else if (request instanceof RpcRequest rpcRequest) {
+      // 处理 RPC 请求
       processRpcRequest(rpcRequest);
     } else if (request instanceof OneWayMessage oneWayMessage) {
       processOneWayMessage(oneWayMessage);
@@ -164,9 +168,11 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
   private void processRpcRequest(final RpcRequest req) {
     try {
+      // 接收消息
       rpcHandler.receive(reverseClient, req.body().nioByteBuffer(), new RpcResponseCallback() {
         @Override
         public void onSuccess(ByteBuffer response) {
+          // 成功响应
           respond(new RpcResponse(req.requestId, new NioManagedBuffer(response)));
         }
 
@@ -316,6 +322,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
    * it will be logged and the channel closed.
    */
   private ChannelFuture respond(Encodable result) {
+    // 远程地址
     SocketAddress remoteAddress = channel.remoteAddress();
     return channel.writeAndFlush(result).addListener(future -> {
       if (future.isSuccess()) {

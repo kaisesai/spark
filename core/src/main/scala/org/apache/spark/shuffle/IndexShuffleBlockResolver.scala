@@ -628,6 +628,7 @@ private[spark] class IndexShuffleBlockResolver(
         throw SparkException.internalError(
           s"unexpected shuffle block id format: $blockId", category = "SHUFFLE")
     }
+    // 先获取索引文件
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getIndexFile(shuffleId, mapId, dirs)

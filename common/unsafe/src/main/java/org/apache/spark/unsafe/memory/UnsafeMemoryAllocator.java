@@ -26,9 +26,12 @@ public class UnsafeMemoryAllocator implements MemoryAllocator {
 
   @Override
   public MemoryBlock allocate(long size) throws OutOfMemoryError {
+    // 分配堆外内存数据, 直接分配指定大小的内存区域, 返回内存起始地址
     long address = Platform.allocateMemory(size);
+    // 分配内存块
     MemoryBlock memory = new MemoryBlock(null, address, size);
     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {
+      // 默认填充满
       memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_CLEAN_VALUE);
     }
     return memory;

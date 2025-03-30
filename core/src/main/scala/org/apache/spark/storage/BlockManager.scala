@@ -530,6 +530,7 @@ private[spark] class BlockManager(
   def initialize(appId: String): Unit = {
     blockTransferService.init(this)
     externalBlockStoreClient.foreach { blockStoreClient =>
+      // 初始化块存储 client
       blockStoreClient.init(appId)
     }
     blockReplicationPolicy = {
@@ -720,9 +721,11 @@ private[spark] class BlockManager(
    * cannot be read successfully.
    */
   override def getLocalBlockData(blockId: BlockId): ManagedBuffer = {
+    // 获取本地块数据
     if (blockId.isShuffle) {
       logDebug(s"Getting local shuffle block ${blockId}")
       try {
+        // shuffle 管理器根据 blockID 获取块信息
         shuffleManager.shuffleBlockResolver.getBlockData(blockId)
       } catch {
         case e: IOException =>
@@ -733,6 +736,7 @@ private[spark] class BlockManager(
           }
       }
     } else {
+      // 非 shuffle
       getLocalBytes(blockId) match {
         case Some(blockData) =>
           new BlockManagerManagedBuffer(blockInfoManager, blockId, blockData, true)
@@ -1040,6 +1044,7 @@ private[spark] class BlockManager(
   def getLocalBytes(blockId: BlockId): Option[BlockData] = {
     logDebug(s"Getting local block $blockId as bytes")
     assert(!blockId.isShuffle, s"Unexpected ShuffleBlockId $blockId")
+    // 块信息管理器获取本地块
     blockInfoManager.lockForReading(blockId).map { info => doGetLocalBytes(blockId, info) }
   }
 
@@ -1061,6 +1066,7 @@ private[spark] class BlockManager(
         // handles deserialized blocks, this block may only be cached in memory as objects, not
         // serialized bytes. Because the caller only requested bytes, it doesn't make sense to
         // cache the block's deserialized objects since that caching may not have a payoff.
+        // 获取块数据
         diskStore.getBytes(blockId)
       } else if (level.useMemory && memoryStore.contains(blockId)) {
         // The block was not found on disk, so serialize an in-memory copy:
@@ -2245,6 +2251,7 @@ private[spark] object BlockManager {
     cleaningThread.start()
 
     override def createTempFile(transportConf: TransportConf): DownloadFile = {
+      // 临时文件
       val file = blockManager.diskBlockManager.createTempLocalBlock()._2
       encryptionKey match {
         case Some(key) =>

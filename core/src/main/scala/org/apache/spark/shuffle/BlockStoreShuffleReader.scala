@@ -31,16 +31,17 @@ import org.apache.spark.util.collection.ExternalSorter
  * Fetches and reads the blocks from a shuffle by requesting them from other nodes' block stores.
  */
 private[spark] class BlockStoreShuffleReader[K, C](
-    handle: BaseShuffleHandle[K, _, C],
-    blocksByAddress: Iterator[(BlockManagerId, collection.Seq[(BlockId, Long, Int)])],
-    context: TaskContext,
+    handle: BaseShuffleHandle[K, _, C], // shuffle 处理器
+    blocksByAddress: Iterator[(BlockManagerId, collection.Seq[(BlockId, Long, Int)])], // 块地址信息
+    context: TaskContext, // 任务上下文
     readMetrics: ShuffleReadMetricsReporter,
-    serializerManager: SerializerManager = SparkEnv.get.serializerManager,
-    blockManager: BlockManager = SparkEnv.get.blockManager,
-    mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker,
-    shouldBatchFetch: Boolean = false)
+    serializerManager: SerializerManager = SparkEnv.get.serializerManager, // 序列化管理器
+    blockManager: BlockManager = SparkEnv.get.blockManager, // 块管理器
+    mapOutputTracker: MapOutputTracker = SparkEnv.get.mapOutputTracker, // 映射输出追踪器
+    shouldBatchFetch: Boolean = false) // 是否批量拉取
   extends ShuffleReader[K, C] with Logging {
 
+  // 依赖
   private val dep = handle.dependency
 
   private def fetchContinuousBlocksInBatch: Boolean = {
@@ -70,12 +71,13 @@ private[spark] class BlockStoreShuffleReader[K, C](
 
   /** Read the combined key-values for this reduce task */
   override def read(): Iterator[Product2[K, C]] = {
+    // shuffle 块拉取迭代器
     val wrappedStreams = new ShuffleBlockFetcherIterator(
       context,
-      blockManager.blockStoreClient,
-      blockManager,
-      mapOutputTracker,
-      blocksByAddress,
+      blockManager.blockStoreClient, // 块存储客户端
+      blockManager, // 块管理器
+      mapOutputTracker, // 追踪器
+      blocksByAddress, // 块地址信息
       serializerManager.wrapStream,
       // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
       SparkEnv.get.conf.get(config.REDUCER_MAX_SIZE_IN_FLIGHT) * 1024 * 1024,
@@ -90,8 +92,10 @@ private[spark] class BlockStoreShuffleReader[K, C](
       readMetrics,
       fetchContinuousBlocksInBatch).toCompletionIterator
 
+    // 序列化实例
     val serializerInstance = dep.serializer.newInstance()
 
+    // 记录迭代器
     // Create a key/value iterator for each stream
     val recordIter = wrappedStreams.flatMap { case (blockId, wrappedStream) =>
       // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
@@ -100,6 +104,7 @@ private[spark] class BlockStoreShuffleReader[K, C](
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
 
+    // 度量器,计数
     // Update the context task metrics for each record read.
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
       recordIter.map { record =>
@@ -108,51 +113,67 @@ private[spark] class BlockStoreShuffleReader[K, C](
       },
       context.taskMetrics().mergeShuffleReadMetrics())
 
+    // 可打断的迭代器
     // An interruptible iterator must be used here in order to support task cancellation
     val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
 
+    // 结果迭代器
     val resultIter: Iterator[Product2[K, C]] = {
       // Sort the output if there is a sort ordering defined.
-      if (dep.keyOrdering.isDefined) {
+      if (dep.keyOrdering.isDefined) { // 定义了排序
         // Create an ExternalSorter to sort the data.
         val sorter: ExternalSorter[K, _, C] = if (dep.aggregator.isDefined) {
+          // 依赖上定义了聚合
           if (dep.mapSideCombine) {
+            // 依赖map端合并为true, 定义了 aggregator 聚合器,仅仅指定了 合并函数
             new ExternalSorter[K, C, C](context,
               Option(new Aggregator[K, C, C](identity,
                 dep.aggregator.get.mergeCombiners,
                 dep.aggregator.get.mergeCombiners)),
               ordering = Some(dep.keyOrdering.get), serializer = dep.serializer)
           } else {
+            // 依赖map端合并为false, 聚合器
             new ExternalSorter[K, Nothing, C](context,
               dep.aggregator.asInstanceOf[Option[Aggregator[K, Nothing, C]]],
               ordering = Some(dep.keyOrdering.get), serializer = dep.serializer)
           }
         } else {
+          // 依赖上没有定义聚合
           new ExternalSorter[K, C, C](context, ordering = Some(dep.keyOrdering.get),
-            serializer = dep.serializer)
-        }
+            serializer = dep.serializer);
+        };
+
         // 排序数据,溢写/合并数据
-        sorter.insertAllAndUpdateMetrics(interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]])
+        sorter.insertAllAndUpdateMetrics(interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]]);
+
       } else if (dep.aggregator.isDefined) {
+        // 排序没有被定义, 但是聚合定义了
         if (dep.mapSideCombine) {
+          // map端有聚合
           // We are reading values that are already combined
-          val combinedKeyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, C)]]
+          val combinedKeyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, C)]];
+          // 返回联合器
           dep.aggregator.get.combineCombinersByKey(combinedKeyValuesIterator, context)
         } else {
+          // map端不聚合
           // We don't know the value type, but also don't care -- the dependency *should*
           // have made sure its compatible w/ this aggregator, which will convert the value
           // type to the combined type C
-          val keyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]]
+          val keyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, Nothing)]];
+          // 返回
           dep.aggregator.get.combineValuesByKey(keyValuesIterator, context)
         }
       } else {
+        // 排序没有被定义, 聚合器也没有定义
         interruptibleIter.asInstanceOf[Iterator[(K, C)]]
       }
     }
 
     resultIter match {
+      // 可中断的迭代器
       case _: InterruptibleIterator[Product2[K, C]] => resultIter
       case _ =>
+        // 其他迭代器
         // Use another interruptible iterator here to support task cancellation as aggregator
         // or(and) sorter may have consumed previous interruptible iterator.
         new InterruptibleIterator[Product2[K, C]](context, resultIter)
