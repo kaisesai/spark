@@ -184,6 +184,7 @@ abstract class RDD[T: ClassTag](
    * have a storage level set yet. Local checkpointing is an exception.
    */
   def persist(newLevel: StorageLevel): this.type = {
+    // 持久化RDD
     if (isLocallyCheckpointed) {
       // This means the user previously called localCheckpoint(), which should have already
       // marked this RDD for persisting. Here we should override the old storage level with
@@ -371,6 +372,7 @@ abstract class RDD[T: ClassTag](
   private[spark] def computeOrReadCheckpoint(split: Partition, context: TaskContext): Iterator[T] =
   {
     if (isCheckpointedAndMaterialized) {
+      // 从检查点读取 RDD
       firstParent[T].iterator(split, context)
     } else {
       // 计算RDD
@@ -384,7 +386,9 @@ abstract class RDD[T: ClassTag](
   private[spark] def getOrCompute(partition: Partition, context: TaskContext): Iterator[T] = {
     val blockId = RDDBlockId(id, partition.index)
     var readCachedBlock = true
+
     // This method is called on executors, so we need call SparkEnv.get instead of sc.env.
+    // 获取块 RDD 数据
     SparkEnv.get.blockManager.getOrElseUpdateRDDBlock(
       context.taskAttemptId(), blockId, storageLevel, elementClassTag, () => {
         readCachedBlock = false
@@ -1678,6 +1682,7 @@ abstract class RDD[T: ClassTag](
     if (context.checkpointDir.isEmpty) {
       throw SparkCoreErrors.checkpointDirectoryHasNotBeenSetInSparkContextError()
     } else if (checkpointData.isEmpty) {
+      // 创建 ReliableRDDCheckpointData
       checkpointData = Some(new ReliableRDDCheckpointData(this))
     }
   }
@@ -1942,6 +1947,7 @@ abstract class RDD[T: ClassTag](
    * doCheckpoint() is called recursively on the parent RDDs.
    */
   private[spark] def doCheckpoint(): Unit = {
+    // 执行检查点
     RDDOperationScope.withScope(sc, "checkpoint", allowNesting = false, ignoreParent = true) {
       if (!doCheckpointCalled) {
         doCheckpointCalled = true
@@ -1951,6 +1957,7 @@ abstract class RDD[T: ClassTag](
             // them in parallel.
             // Checkpoint parents first because our lineage will be truncated after we
             // checkpoint ourselves
+            // 所有依赖的 RDD 执行检查点
             dependencies.foreach(_.rdd.doCheckpoint())
           }
           checkpointData.get.checkpoint()

@@ -62,6 +62,7 @@ private[spark] abstract class RDDCheckpointData[T: ClassTag](@transient private 
    * This is called immediately after the first action invoked on this RDD has completed.
    */
   final def checkpoint(): Unit = {
+    // 执行检查点
     // Guard against multiple threads checkpointing the same RDD by
     // atomically flipping the state of this RDDCheckpointData
     RDDCheckpointData.synchronized {

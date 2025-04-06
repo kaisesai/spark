@@ -59,6 +59,7 @@ private[spark] class ReliableCheckpointRDD[T: ClassTag](
 
   override val partitioner: Option[Partitioner] = {
     _partitioner.orElse {
+      // 读取检查点
       ReliableCheckpointRDD.readCheckpointedPartitionerFile(context, checkpointPath)
     }
   }
@@ -153,6 +154,7 @@ private[spark] object ReliableCheckpointRDD extends Logging {
 
     val sc = originalRDD.sparkContext
 
+    // 将 RDD 的数据写入到检查点的目录上去.
     // Create the output path for the checkpoint
     val checkpointDirPath = new Path(checkpointDir)
     val fs = checkpointDirPath.getFileSystem(sc.hadoopConfiguration)
@@ -163,7 +165,10 @@ private[spark] object ReliableCheckpointRDD extends Logging {
     // Save to file, and reload it as an RDD
     val broadcastedConf = sc.broadcast(
       new SerializableConfiguration(sc.hadoopConfiguration))
+
+
     // TODO: This is expensive because it computes the RDD again unnecessarily (SPARK-8582)
+    // 这是一个昂贵的操作,因为它会不必要地再次计算RDD
     sc.runJob(originalRDD,
       writePartitionToCheckpointFile[T](checkpointDirPath.toString, broadcastedConf) _)
 
@@ -175,6 +180,7 @@ private[spark] object ReliableCheckpointRDD extends Logging {
       TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - checkpointStartTimeNs)
     logInfo(log"Checkpointing took ${MDC(TOTAL_TIME, checkpointDurationMs)} ms.")
 
+    // 创建一个检查点RDD
     val newRDD = new ReliableCheckpointRDD[T](
       sc, checkpointDirPath.toString, originalRDD.partitioner)
     if (newRDD.partitions.length != originalRDD.partitions.length) {

@@ -279,6 +279,7 @@ private[spark] class MemoryStore(
         }
 
         entries.synchronized {
+          // 内存保存数据
           entries.put(blockId, entry)
         }
 
@@ -314,6 +315,7 @@ private[spark] class MemoryStore(
       memoryMode: MemoryMode,
       classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], Long] = {
 
+    // 反序列化value持有器
     val valuesHolder = new DeserializedValuesHolder[T](classTag, memoryMode)
 
     putIterator(blockId, values, classTag, memoryMode, valuesHolder) match {
@@ -364,6 +366,7 @@ private[spark] class MemoryStore(
       initialMemoryThreshold.toInt
     }
 
+    // 序列化value持有器
     val valuesHolder = new SerializedValuesHolder[T](blockId, chunkSize, classTag,
       memoryMode, serializerManager)
 

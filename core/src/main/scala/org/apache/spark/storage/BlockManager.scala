@@ -973,6 +973,7 @@ private[spark] class BlockManager(
         val taskContext = Option(TaskContext.get())
         if (level.useMemory && memoryStore.contains(blockId)) {
           val iter: Iterator[Any] = if (level.deserialized) {
+            // 从内存获取
             memoryStore.getValues(blockId).get
           } else {
             serializerManager.dataDeserializeStream(
@@ -986,6 +987,7 @@ private[spark] class BlockManager(
           })
           Some(new BlockResult(ci, DataReadMethod.Memory, info.size))
         } else if (level.useDisk && diskStore.contains(blockId)) {
+          // 磁盘读取
           var diskData: BlockData = null
           try {
             diskData = diskStore.getBytes(blockId)
@@ -1096,6 +1098,7 @@ private[spark] class BlockManager(
    */
   private[spark] def getRemoteValues[T: ClassTag](blockId: BlockId): Option[BlockResult] = {
     val ct = implicitly[ClassTag[T]]
+    // 远程
     getRemoteBlock(blockId, (data: ManagedBuffer) => {
       val values =
         serializerManager.dataDeserializeStream(blockId, data.createInputStream())(ct)
@@ -1314,11 +1317,13 @@ private[spark] class BlockManager(
    * automatically be freed once the result's `data` iterator is fully consumed.
    */
   def get[T: ClassTag](blockId: BlockId): Option[BlockResult] = {
+    // 从本地获取块
     val local = getLocalValues(blockId)
     if (local.isDefined) {
       logInfo(log"Found block ${MDC(BLOCK_ID, blockId)} locally")
       return local
     }
+    // 从远程获取块
     val remote = getRemoteValues[T](blockId)
     if (remote.isDefined) {
       logInfo(log"Found block ${MDC(BLOCK_ID, blockId)} remotely")
@@ -1382,6 +1387,8 @@ private[spark] class BlockManager(
       classTag: ClassTag[T],
       makeIterator: () => Iterator[T]): Either[BlockResult, Iterator[T]] = {
     val isCacheVisible = isRDDBlockVisible(blockId)
+
+    // 获取数据
     val res = getOrElseUpdate(blockId, level, classTag, makeIterator, isCacheVisible)
     if (res.isLeft && !isCacheVisible) {
       // Block exists but not visible, report taskId -> blockId info to master.
@@ -1409,13 +1416,18 @@ private[spark] class BlockManager(
     // will have a better chance to replicate the cache block because of the `checkShouldStore`
     // validation when putting a new block.
     var computed: Boolean = false
+
+    // 迭代器
     val iterator = () => {
       computed = true
       makeIterator()
     }
+
+    // 缓存迭代器
     if (isCacheVisible) {
       // Attempt to read the block from local or remote storage. If it's present, then we don't need
       // to go through the local-get-or-put path.
+      // 获取块
       get[T](blockId)(classTag) match {
         case Some(block) =>
           return Left(block)
@@ -1428,6 +1440,7 @@ private[spark] class BlockManager(
     //  for same blockId could be different. And the reported accumulators could be not matching
     //  the cached results.
     // Initially we hold no locks on this block.
+    // 放置迭代器
     doPutIterator(blockId, iterator, level, classTag, keepReadLock = true) match {
       case None =>
         // doPut() didn't hand work back to us, so the block already existed or was successfully
@@ -1436,6 +1449,8 @@ private[spark] class BlockManager(
           // Force compute to report accumulator updates.
           Utils.getIteratorSize(makeIterator())
         }
+
+        // 块结果
         val blockResult = getLocalValues(blockId).getOrElse {
           // Since we held a read lock between the doPut() and get() calls, the block should not
           // have been evicted, so get() not returning the block indicates some internal error.
@@ -1551,6 +1566,7 @@ private[spark] class BlockManager(
     require(level != null && level.isValid, "StorageLevel is null or invalid")
     checkShouldStore(blockId)
 
+    // 放置块信息
     val putBlockInfo = {
       val newInfo = new BlockInfo(level, classTag, tellMaster)
       if (blockInfoManager.lockNewBlockForWriting(blockId, newInfo, keepReadLock)) {
@@ -1564,7 +1580,10 @@ private[spark] class BlockManager(
 
     val startTimeNs = System.nanoTime()
     var exceptionWasThrown: Boolean = true
+
+    // 返回结果
     val result: Option[T] = try {
+      // 实际的执行结果
       val res = putBody(putBlockInfo)
       exceptionWasThrown = false
       if (res.isEmpty) {
@@ -1630,6 +1649,8 @@ private[spark] class BlockManager(
       classTag: ClassTag[T],
       tellMaster: Boolean = true,
       keepReadLock: Boolean = false): Option[PartiallyUnrolledIterator[T]] = {
+
+    // 放置
     doPut(blockId, level, classTag, tellMaster = tellMaster, keepReadLock = keepReadLock) { info =>
       val startTimeNs = System.nanoTime()
       var iteratorFromFailedMemoryStorePut: Option[PartiallyUnrolledIterator[T]] = None
@@ -1639,6 +1660,7 @@ private[spark] class BlockManager(
         // Put it in memory first, even if it also has useDisk set to true;
         // We will drop it to disk later if the memory store can't hold it.
         if (level.deserialized) {
+          // 反序列化
           memoryStore.putIteratorAsValues(blockId, iterator(), level.memoryMode, classTag) match {
             case Right(s) =>
               size = s
@@ -1646,6 +1668,7 @@ private[spark] class BlockManager(
               // Not enough space to unroll this block; drop to disk if applicable
               if (level.useDisk) {
                 logWarning(log"Persisting block ${MDC(BLOCK_ID, blockId)} to disk instead.")
+                // 磁盘
                 diskStore.put(blockId) { channel =>
                   val out = Channels.newOutputStream(channel)
                   serializerManager.dataSerializeStream(blockId, out, iter)(classTag)
@@ -1656,6 +1679,7 @@ private[spark] class BlockManager(
               }
           }
         } else { // !level.deserialized
+          // bytes
           memoryStore.putIteratorAsBytes(blockId, iterator(), classTag, level.memoryMode) match {
             case Right(s) =>
               size = s
@@ -1663,6 +1687,7 @@ private[spark] class BlockManager(
               // Not enough space to unroll this block; drop to disk if applicable
               if (level.useDisk) {
                 logWarning(log"Persisting block ${MDC(BLOCK_ID, blockId)} to disk instead.")
+                // 磁盘
                 diskStore.put(blockId) { channel =>
                   val out = Channels.newOutputStream(channel)
                   partiallySerializedValues.finishWritingToStream(out)
